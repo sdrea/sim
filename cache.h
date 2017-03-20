@@ -1,3 +1,13 @@
+// Variant of SimpleScalar developed for modelling cache compression and prefetching
+// Based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
+//
+// changes wrapped in //sdrea-begin ... //sdrea-end
+//
+// Sean Rea
+// sdrea@lakeheadu.ca
+// 2016-2017
+////////////////////////////////////////////////////////////////
+
 /* cache.h - cache module interfaces */
 
 /* SimpleScalar(TM) Tool Suite
@@ -96,7 +106,16 @@
 
 /* highly associative caches are implemented using a hash table lookup to
    speed block access, this macro decides if a cache is "highly associative" */
-#define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 4)
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//#define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 4)
+
+#define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 32)
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
 /* cache replacement policy */
 enum cache_policy {
@@ -120,6 +139,16 @@ struct cache_blk_t
   /* since hash table lists are typically small, there is no previous
      pointer, deletion requires a trip through the hash table bucket list */
   md_addr_t tag;		/* data block tag value */
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+  byte_t bdi_encode;
+  qword_t bdi_mask;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
   unsigned int status;		/* block status, see CACHE_BLK_* defs above */
   tick_t ready;		/* time when block will be accessible, field
 				   is set when a miss fetch is initiated */
@@ -199,6 +228,46 @@ struct cache_t
   counter_t writebacks;		/* total number of writebacks at misses */
   counter_t invalidations;	/* total number of external invalidations */
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+  int bdi_compress;
+  int bdi_check;
+
+  double cacti_tag_static_power;
+  double cacti_tag_read_dynamic_energy;
+  double cacti_tag_write_dynamic_energy;
+  double cacti_data_static_power;
+  double cacti_data_read_dynamic_energy;
+  double cacti_data_write_dynamic_energy;
+
+  int decompression_latency;
+
+  double sim_tag_static_power;
+  double sim_tag_read_dynamic_energy;
+  double sim_tag_write_dynamic_energy;
+  double sim_data_static_power;
+  double sim_data_read_dynamic_energy;
+  double sim_data_write_dynamic_energy;
+
+  tick_t last_cache_access;
+
+  double compressor_static_power;
+  double compressor_dynamic_power;
+  double decompressor_static_power;
+  double decompressor_dynamic_power;
+  double compressor_delay;
+  double decompressor_delay;
+  int compressor_frequency;
+
+  double sim_compressor_static_power;
+  double sim_compressor_dynamic_power;
+  double sim_decompressor_static_power;
+  double sim_decompressor_dynamic_power;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
   /* last block to hit, used to optimize cache hit processing */
   md_addr_t last_tagset;	/* tag of last line accessed */
   struct cache_blk_t *last_blk;	/* cache block last accessed */
@@ -262,7 +331,17 @@ cache_access(struct cache_t *cp,	/* cache to access */
 	     int nbytes,		/* number of bytes to access */
 	     tick_t now,		/* time of access */
 	     byte_t **udata,		/* for return of user data ptr */
-	     md_addr_t *repl_addr);	/* for address of replaced block */
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//	     md_addr_t *repl_addr);	/* for address of replaced block */
+
+	     md_addr_t *repl_addr,	/* for address of replaced block */
+             struct mem_t *mem);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
 /* cache access functions, these are safe, they check alignment and
    permissions */

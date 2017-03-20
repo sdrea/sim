@@ -1,3 +1,13 @@
+// Variant of SimpleScalar developed for modelling cache compression and prefetching
+// Based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
+//
+// changes wrapped in //sdrea-begin ... //sdrea-end
+//
+// Sean Rea
+// sdrea@lakeheadu.ca
+// 2016-2017
+////////////////////////////////////////////////////////////////
+
 /* sim-outorder.c - sample out-of-order issue perf simulator implementation */
 
 /* SimpleScalar(TM) Tool Suite
@@ -98,7 +108,20 @@ static struct mem_t *mem = NULL;
 static unsigned int max_insts;
 
 /* number of insts skipped before timing starts */
-static int fastfwd_count;
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//static int fastfwd_count;
+
+static unsigned long fastfwd_count;
+static int simpoint;
+static int simpoint_interval;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
 
 /* pipeline trace range and output filename */
 static int ptrace_nelt = 0;
@@ -446,6 +469,75 @@ static struct stat_stat_t *pcstat_sdists[MAX_PCSTAT_VARS];
 	 ? *((STAT)->variant.for_counter.var)				\
 	 : (panic("bad stat class"), 0))))
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+counter_t tmp_misses_il1;
+counter_t tmp_misses_dl1;
+
+struct pf_set_t
+{
+  md_addr_t tag;
+};
+
+struct pf_t
+{
+  int nsets;
+  struct pf_set_t sets[1]; 
+};
+
+struct pf_t *last;
+
+static int il1_bdi_compress;
+static int il1_bdi_check;
+static double il1_cacti_tag_static_power;
+static double il1_cacti_tag_read_dynamic_energy;
+static double il1_cacti_tag_write_dynamic_energy;
+static double il1_cacti_data_static_power;
+static double il1_cacti_data_read_dynamic_energy;
+static double il1_cacti_data_write_dynamic_energy;
+static int il1_decompression_latency;
+
+static int dl1_bdi_compress;
+static int dl1_bdi_check;
+static double dl1_cacti_tag_static_power;
+static double dl1_cacti_tag_read_dynamic_energy;
+static double dl1_cacti_tag_write_dynamic_energy;
+static double dl1_cacti_data_static_power;
+static double dl1_cacti_data_read_dynamic_energy;
+static double dl1_cacti_data_write_dynamic_energy;
+static int dl1_decompression_latency;
+
+static int il2_bdi_compress;
+static int il2_bdi_check;
+static double il2_cacti_tag_static_power;
+static double il2_cacti_tag_read_dynamic_energy;
+static double il2_cacti_tag_write_dynamic_energy;
+static double il2_cacti_data_static_power;
+static double il2_cacti_data_read_dynamic_energy;
+static double il2_cacti_data_write_dynamic_energy;
+static int il2_decompression_latency;
+
+static int dl2_bdi_compress;
+static int dl2_bdi_check;
+static double dl2_cacti_tag_static_power;
+static double dl2_cacti_tag_read_dynamic_energy;
+static double dl2_cacti_tag_write_dynamic_energy;
+static double dl2_cacti_data_static_power;
+static double dl2_cacti_data_read_dynamic_energy;
+static double dl2_cacti_data_write_dynamic_energy;
+static int dl2_decompression_latency;
+
+static double compressor_static_power;
+static double compressor_dynamic_power;
+static double compressor_delay;
+static int compressor_frequency;
+static double decompressor_static_power;
+static double decompressor_dynamic_power;
+static double decompressor_delay;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
 /* memory access latency, assumed to not cross a page boundary */
 static unsigned int			/* total latency of access */
@@ -477,8 +569,19 @@ dl1_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
   if (cache_dl2)
     {
       /* access next level of data cache hierarchy */
-      lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize,
-			 /* now */now, /* pudata */NULL, /* repl addr */NULL);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//      lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize,
+//			 /* now */now, /* pudata */NULL, /* repl addr */NULL);
+
+      lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, mem);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
 
       /* Wattch -- Dcache2 access */
       dcache2_access++;
@@ -538,8 +641,19 @@ il1_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
 if (cache_il2)
     {
       /* access next level of inst cache hierarchy */
-      lat = cache_access(cache_il2, cmd, baddr, NULL, bsize,
-			 /* now */now, /* pudata */NULL, /* repl addr */NULL);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//      lat = cache_access(cache_il2, cmd, baddr, NULL, bsize,
+//			 /* now */now, /* pudata */NULL, /* repl addr */NULL);
+
+      lat = cache_access(cache_il2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, mem);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
 
       /* Wattch -- Dcache2 access */
       dcache2_access++;
@@ -635,15 +749,30 @@ sim_reg_options(struct opt_odb_t *odb)
 
   /* instruction limit */
 
-  opt_reg_uint(odb, "-max:inst", "maximum number of inst's to execute",
-	       &max_insts, /* default */0,
-	       /* print */TRUE, /* format */NULL);
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//  opt_reg_uint(odb, "-max:inst", "maximum number of inst's to execute",
+//	       &max_insts, /* default */0,
+//	       /* print */TRUE, /* format */NULL);
 
   /* trace options */
 
-  opt_reg_int(odb, "-fastfwd", "number of insts skipped before timing starts",
-	      &fastfwd_count, /* default */0,
+//  opt_reg_int(odb, "-fastfwd", "number of insts skipped before timing starts",
+//	      &fastfwd_count, /* default */0,
+//	      /* print */TRUE, /* format */NULL);
+
+  opt_reg_int(odb, "-interval", "Simpoint interval size",
+	      &simpoint_interval, /* default */100000000,
 	      /* print */TRUE, /* format */NULL);
+
+  opt_reg_int(odb, "-simpoint", "Simpoint",
+	      &simpoint, /* default */0,
+	      /* print */TRUE, /* format */NULL);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
   opt_reg_string_list(odb, "-ptrace",
 	      "generate pipetrace, i.e., <fname|stdout|stderr> <range>",
 	      ptrace_opts, /* arr_sz */2, &ptrace_nelt, /* default */NULL,
@@ -925,6 +1054,186 @@ sim_reg_options(struct opt_odb_t *odb)
   opt_reg_flag(odb, "-bugcompat",
 	       "operate in backward-compatible bugs mode (for testing only)",
 	       &bugcompat_mode, /* default */FALSE, /* print */TRUE, NULL);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+  opt_reg_flag(odb, "-cache:il1:bdi-compress",
+	       "il1 compressed using Base-Delta-Immediate",
+	       &il1_bdi_compress, /* default */FALSE, /* print */TRUE, NULL);
+
+  opt_reg_flag(odb, "-cache:il1:bdi-check",
+	       "il1 checked for compressibility using Base-Delta-Immediate",
+	       &il1_bdi_check, /* default */FALSE, /* print */TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il1:tag:static-power",
+                "il1 tag leakage power (static power) (mW)",
+                &il1_cacti_tag_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il1:tag:read:dynamic-energy",
+                "il1 tag dynamic read energy per access (nJ)",
+                &il1_cacti_tag_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il1:tag:write:dynamic-energy",
+                "il1 tag dynamic write energy per access (nJ)",
+                &il1_cacti_tag_write_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il1:data:static-power",
+                "il1 data leakage power (static power) (mW)",
+                &il1_cacti_data_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il1:data:read:dynamic-energy",
+                "il1 data dynamic read energy per access (nJ)",
+                &il1_cacti_data_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il1:data:write:dynamic-energy",
+                "il1 data dynamic write energy per access (nJ)",
+                &il1_cacti_data_write_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_int(odb, "-cache:il1:decompression-latency",
+                "il1 decompression latency",
+                &il1_decompression_latency, 0, TRUE, NULL);
+
+  opt_reg_flag(odb, "-cache:dl1:bdi-compress",
+	       "dl1 compressed using Base-Delta-Immediate",
+	       &dl1_bdi_compress, /* default */FALSE, /* print */TRUE, NULL);
+
+  opt_reg_flag(odb, "-cache:dl1:bdi-check",
+	       "dl1 checked for compressibility using Base-Delta-Immediate",
+	       &dl1_bdi_check, /* default */FALSE, /* print */TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl1:tag:static-power",
+                "dl1 tag leakage power (static power) (mW)",
+                &dl1_cacti_tag_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl1:tag:read:dynamic-energy",
+                "dl1 tag dynamic read energy per access (nJ)",
+                &dl1_cacti_tag_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl1:tag:write:dynamic-energy",
+                "dl1 tag dynamic write energy per access (nJ)",
+                &dl1_cacti_tag_write_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl1:data:static-power",
+                "dl1 data leakage power (static power) (mW)",
+                &dl1_cacti_data_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl1:data:read:dynamic-energy",
+                "dl1 data dynamic read energy per access (nJ)",
+                &dl1_cacti_data_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl1:data:write:dynamic-energy",
+                "dl1 data dynamic write energy per access (nJ)",
+                &dl1_cacti_data_write_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_int(odb, "-cache:dl1:decompression-latency",
+                "dl1 decompression latency",
+                &dl1_decompression_latency, 0, TRUE, NULL);
+
+  opt_reg_flag(odb, "-cache:il2:bdi-compress",
+	       "il2 compressed using Base-Delta-Immediate",
+	       &il2_bdi_compress, /* default */FALSE, /* print */TRUE, NULL);
+
+  opt_reg_flag(odb, "-cache:il2:bdi-check",
+	       "il2 checked for compressibility using Base-Delta-Immediate",
+	       &il2_bdi_check, /* default */FALSE, /* print */TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il2:tag:static-power",
+                "il2 tag leakage power (static power) (mW)",
+                &il2_cacti_tag_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il2:tag:read:dynamic-energy",
+                "il2 tag dynamic read energy per access (nJ)",
+                &il2_cacti_tag_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il2:tag:write:dynamic-energy",
+                "il2 tag dynamic write energy per access (nJ)",
+                &il2_cacti_tag_write_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il2:data:static-power",
+                "il2 data leakage power (static power) (mW)",
+                &il2_cacti_data_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il2:data:read:dynamic-energy",
+                "il2 data dynamic read energy per access (nJ)",
+                &il2_cacti_data_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:il2:data:write:dynamic-energy",
+                "il2 data dynamic write energy per access (nJ)",
+                &il2_cacti_data_write_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_int(odb, "-cache:il2:decompression-latency",
+                "il2 decompression latency",
+                &il2_decompression_latency, 0, TRUE, NULL);
+
+  opt_reg_flag(odb, "-cache:dl2:bdi-compress",
+	       "dl2 compressed using Base-Delta-Immediate",
+	       &dl2_bdi_compress, /* default */FALSE, /* print */TRUE, NULL);
+
+  opt_reg_flag(odb, "-cache:dl2:bdi-check",
+	       "dl2 checked for compressibility using Base-Delta-Immediate",
+	       &dl2_bdi_check, /* default */FALSE, /* print */TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl2:tag:static-power",
+                "dl2 tag leakage power (static power) (mW)",
+                &dl2_cacti_tag_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl2:tag:read:dynamic-energy",
+                "dl2 tag dynamic read energy per access (nJ)",
+                &dl2_cacti_tag_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl2:tag:write:dynamic-energy",
+                "dl2 tag dynamic write energy per access (nJ)",
+                &dl2_cacti_tag_write_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl2:data:static-power",
+                "dl2 data leakage power (static power) (mW)",
+                &dl2_cacti_data_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl2:data:read:dynamic-energy",
+                "dl2 data dynamic read energy per access (nJ)",
+                &dl2_cacti_data_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:dl2:data:write:dynamic-energy",
+                "dl2 data dynamic write energy per access (nJ)",
+                &dl2_cacti_data_write_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_int(odb, "-cache:dl2:decompression-latency",
+                "dl2 decompression latency",
+                &dl2_decompression_latency, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:compressor:static-power",
+                "compressor static power (nW)",
+                &compressor_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:compressor:dynamic-power",
+                "compressor dynamic power (nW)",
+                &compressor_dynamic_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:decompressor:static-power",
+                "decompressor static power (nW)",
+                &decompressor_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:decompressor:dynamic-power",
+                "decompressor dynamic power (nW)",
+                &decompressor_dynamic_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-cache:compressor:delay",
+                "compressor delay (ps)",
+                &compressor_delay, 0, TRUE, NULL);
+
+  opt_reg_int(odb, "-cache:compressor:frequency",
+                "compressor frequency (GHz)",
+                &compressor_frequency, 0, TRUE, NULL);
+
+
+  opt_reg_double(odb, "-cache:decompressor:delay",
+                "decompressor delay (ps)",
+                &decompressor_delay, 0, TRUE, NULL);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 }
 
 /* check simulator-specific option values */
@@ -935,8 +1244,14 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
   char name[128], c;
   int nsets, bsize, assoc;
 
-  if (fastfwd_count < 0 || fastfwd_count >= 2147483647)
-    fatal("bad fast forward count: %d", fastfwd_count);
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//  if (fastfwd_count < 0 || fastfwd_count >= 2147483647)
+//    fatal("bad fast forward count: %d", fastfwd_count);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
   if (ruu_ifq_size < 1 || (ruu_ifq_size & (ruu_ifq_size - 1)) != 0)
     fatal("inst fetch queue size must be positive > 0 and a power of two");
@@ -1086,6 +1401,25 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
 	}
     }
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+int pf_nsets = 64;
+int i;
+
+last = (struct pf_t *) calloc(1, sizeof(struct pf_t) + (pf_nsets-1)*sizeof(struct pf_set_t));
+if (!last) fatal("out of virtual memory");
+
+last->nsets = pf_nsets;
+
+for (i=0; i<pf_nsets; i++)
+{
+last->sets[i].tag = 0;
+}
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
   /* use a level 1 I-cache? */
   if (!mystricmp(cache_il1_opt, "none"))
     {
@@ -1229,6 +1563,85 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
   if (res_fpmult > MAX_INSTS_PER_CLASS)
     fatal("number of FP mult/div's must be <= MAX_INSTS_PER_CLASS");
   fu_config[FU_FPMULT_INDEX].quantity = res_fpmult;
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+      cache_il1->bdi_compress = il1_bdi_compress;
+      cache_il1->bdi_check = il1_bdi_check;
+      cache_il1->cacti_tag_static_power = il1_cacti_tag_static_power;
+      cache_il1->cacti_tag_read_dynamic_energy = il1_cacti_tag_read_dynamic_energy;
+      cache_il1->cacti_tag_write_dynamic_energy = il1_cacti_tag_write_dynamic_energy;
+      cache_il1->cacti_data_static_power = il1_cacti_data_static_power;
+      cache_il1->cacti_data_read_dynamic_energy = il1_cacti_data_read_dynamic_energy;
+      cache_il1->cacti_data_write_dynamic_energy = il1_cacti_data_write_dynamic_energy;
+      cache_il1->decompression_latency = il1_decompression_latency;
+
+  cache_il1->compressor_static_power = compressor_static_power;
+  cache_il1->compressor_dynamic_power = compressor_dynamic_power;
+  cache_il1->decompressor_static_power = decompressor_static_power;
+  cache_il1->decompressor_dynamic_power = decompressor_dynamic_power;
+  cache_il1->compressor_delay = compressor_delay;
+  cache_il1->decompressor_delay = decompressor_delay;
+  cache_il1->compressor_frequency = compressor_frequency;
+
+      cache_dl1->bdi_compress = dl1_bdi_compress;
+      cache_dl1->bdi_check = dl1_bdi_check;
+      cache_dl1->cacti_tag_static_power = dl1_cacti_tag_static_power;
+      cache_dl1->cacti_tag_read_dynamic_energy = dl1_cacti_tag_read_dynamic_energy;
+      cache_dl1->cacti_tag_write_dynamic_energy = dl1_cacti_tag_write_dynamic_energy;
+      cache_dl1->cacti_data_static_power = dl1_cacti_data_static_power;
+      cache_dl1->cacti_data_read_dynamic_energy = dl1_cacti_data_read_dynamic_energy;
+      cache_dl1->cacti_data_write_dynamic_energy = dl1_cacti_data_write_dynamic_energy;
+      cache_dl1->decompression_latency = dl1_decompression_latency;
+
+  cache_dl1->compressor_static_power = compressor_static_power;
+  cache_dl1->compressor_dynamic_power = compressor_dynamic_power;
+  cache_dl1->decompressor_static_power = decompressor_static_power;
+  cache_dl1->decompressor_dynamic_power = decompressor_dynamic_power;
+  cache_dl1->compressor_delay = compressor_delay;
+  cache_dl1->decompressor_delay = decompressor_delay;
+  cache_dl1->compressor_frequency = compressor_frequency;
+
+      cache_il2->bdi_compress = il2_bdi_compress;
+      cache_il2->bdi_check = il2_bdi_check;
+      cache_il2->cacti_tag_static_power = il2_cacti_tag_static_power;
+      cache_il2->cacti_tag_read_dynamic_energy = il2_cacti_tag_read_dynamic_energy;
+      cache_il2->cacti_tag_write_dynamic_energy = il2_cacti_tag_write_dynamic_energy;
+      cache_il2->cacti_data_static_power = il2_cacti_data_static_power;
+      cache_il2->cacti_data_read_dynamic_energy = il2_cacti_data_read_dynamic_energy;
+      cache_il2->cacti_data_write_dynamic_energy = il2_cacti_data_write_dynamic_energy;
+      cache_il2->decompression_latency = il2_decompression_latency;
+
+  cache_il2->compressor_static_power = compressor_static_power;
+  cache_il2->compressor_dynamic_power = compressor_dynamic_power;
+  cache_il2->decompressor_static_power = decompressor_static_power;
+  cache_il2->decompressor_dynamic_power = decompressor_dynamic_power;
+  cache_il2->compressor_delay = compressor_delay;
+  cache_il2->decompressor_delay = decompressor_delay;
+  cache_il2->compressor_frequency = compressor_frequency;
+
+      cache_dl2->bdi_compress = dl2_bdi_compress;
+      cache_dl2->bdi_check = dl2_bdi_check;
+      cache_dl2->cacti_tag_static_power = dl2_cacti_tag_static_power;
+      cache_dl2->cacti_tag_read_dynamic_energy = dl2_cacti_tag_read_dynamic_energy;
+      cache_dl2->cacti_tag_write_dynamic_energy = dl2_cacti_tag_write_dynamic_energy;
+      cache_dl2->cacti_data_static_power = dl2_cacti_data_static_power;
+      cache_dl2->cacti_data_read_dynamic_energy = dl2_cacti_data_read_dynamic_energy;
+      cache_dl2->cacti_data_write_dynamic_energy = dl2_cacti_data_write_dynamic_energy;
+      cache_dl2->decompression_latency = dl2_decompression_latency;
+
+  cache_dl2->compressor_static_power = compressor_static_power;
+  cache_dl2->compressor_dynamic_power = compressor_dynamic_power;
+  cache_dl2->decompressor_static_power = decompressor_static_power;
+  cache_dl2->decompressor_dynamic_power = decompressor_dynamic_power;
+  cache_dl2->compressor_delay = compressor_delay;
+  cache_dl2->decompressor_delay = decompressor_delay;
+  cache_dl2->compressor_frequency = compressor_frequency;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 }
 
 /* print simulator-specific configuration information */
@@ -2255,20 +2668,46 @@ ruu_commit(void)
 		      dcache_access++;
 
               /* commit store value to D-cache */
-		      lat =
-			cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3),
-				     NULL, 4, sim_cycle, NULL, NULL);
-		      if (lat > cache_dl1_lat)
-			events |= PEV_CACHEMISS;
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//		      lat =
+//			cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3),
+//				     NULL, 4, sim_cycle, NULL, NULL);
+//
+//		      if (lat > cache_dl1_lat)
+//			events |= PEV_CACHEMISS;
+
+		      tmp_misses_dl1 = cache_dl1->misses;
+		      lat = cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3), NULL, 4, sim_cycle, NULL, NULL, mem);
+		      if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
+
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
 		    }
 
 		  /* all loads and stores must to access D-TLB */
 		  if (dtlb)
 		    {
 		      /* access the D-TLB */
-		      lat =
-			cache_access(dtlb, Read, (LSQ[LSQ_head].addr & ~3),
-				     NULL, 4, sim_cycle, NULL, NULL);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//		      lat =
+//			cache_access(dtlb, Read, (LSQ[LSQ_head].addr & ~3),
+//				     NULL, 4, sim_cycle, NULL, NULL);
+
+		      lat = cache_access(dtlb, Read, (LSQ[LSQ_head].addr & ~3),
+				     NULL, 4, sim_cycle, NULL, NULL, NULL);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 		      if (lat > 1)
 			events |= PEV_TLBMISS;
 		    }
@@ -2856,12 +3295,26 @@ ruu_issue(void)
 				  /* Wattch -- D-cache access */
 				  dcache_access++;
 				  /* access the cache if non-faulting */
-				  load_lat =
-				    cache_access(cache_dl1, Read,
-						 (rs->addr & ~3), NULL, 4,
-						 sim_cycle, NULL, NULL);
-				  if (load_lat > cache_dl1_lat)
-				    events |= PEV_CACHEMISS;
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//				  load_lat =
+//				    cache_access(cache_dl1, Read,
+//						 (rs->addr & ~3), NULL, 4,
+//						 sim_cycle, NULL, NULL);
+//
+//				  if (load_lat > cache_dl1_lat)
+//				    events |= PEV_CACHEMISS;
+
+				  tmp_misses_dl1 = cache_dl1->misses;
+				  load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
+				  if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
 				}
 			      else
 				{
@@ -2875,9 +3328,21 @@ ruu_issue(void)
 			    {
 			      /* access the D-DLB, NOTE: this code will
 				 initiate speculative TLB misses */
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//			      tlb_lat =
+//				cache_access(dtlb, Read, (rs->addr & ~3),
+//					     NULL, 4, sim_cycle, NULL, NULL);
+
 			      tlb_lat =
 				cache_access(dtlb, Read, (rs->addr & ~3),
-					     NULL, 4, sim_cycle, NULL, NULL);
+					     NULL, 4, sim_cycle, NULL, NULL, NULL);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 			      if (tlb_lat > 1)
 				events |= PEV_TLBMISS;
 
@@ -4498,27 +4963,78 @@ ruu_fetch(void)
 	  /* read instruction from memory */
 	  MD_FETCH_INST(inst, mem, fetch_regs_PC);
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+enum md_opcode dvp_op;
+MD_SET_OPCODE(dvp_op, inst);
+
+if (MD_OP_FLAGS(dvp_op) & F_LOAD) 
+{
+
+// Do something when we load from mem, for example check prefetch table and start decompressing.
+
+}
+
+if (MD_OP_FLAGS(dvp_op) & F_STORE) 
+{
+
+// Do something when we store to mem, for example wipe out block in prefetch table
+
+}
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 	  /* address is within program text, read instruction from memory */
 	  lat = cache_il1_lat;
 	  if (cache_il1)
 	    {
 	      /* access the I-cache */
-	      lat =
-		cache_access(cache_il1, Read, IACOMPRESS(fetch_regs_PC),
-			     NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle,
-			     NULL, NULL);
-	      if (lat > cache_il1_lat)
-		last_inst_missed = TRUE;
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//	      lat =
+//		cache_access(cache_il1, Read, IACOMPRESS(fetch_regs_PC),
+//			     NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle,
+//			     NULL, NULL);
+//
+//	      if (lat > cache_il1_lat)
+//		last_inst_missed = TRUE;
+
+	      tmp_misses_il1 = cache_il1->misses;
+	      lat = cache_access(cache_il1, Read, IACOMPRESS(fetch_regs_PC), NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle, NULL, NULL, mem);
+	      if (cache_il1->misses > tmp_misses_il1) last_inst_missed = TRUE;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
 	    }
 
 	  if (itlb)
 	    {
 	      /* access the I-TLB, NOTE: this code will initiate
 		 speculative TLB misses */
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//	      tlb_lat =
+//		cache_access(itlb, Read, IACOMPRESS(fetch_regs_PC),
+//			     NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle,
+//			     NULL, NULL);
+
 	      tlb_lat =
 		cache_access(itlb, Read, IACOMPRESS(fetch_regs_PC),
 			     NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle,
-			     NULL, NULL);
+			     NULL, NULL, NULL);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
 	      if (tlb_lat > 1)
 		last_inst_tmissed = TRUE;
 
@@ -4527,7 +5043,18 @@ ruu_fetch(void)
 	    }
 
 	  /* I-cache/I-TLB miss? assumes I-cache hit >= I-TLB hit */
-	  if (lat != cache_il1_lat)
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//	  if (lat != cache_il1_lat)
+
+	  if (cache_il1->misses > tmp_misses_il1)
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
 	    {
 	      /* I-cache miss, block fetch until it is resolved */
 	      ruu_fetch_issue_delay += lat - 1;
@@ -4713,9 +5240,29 @@ sim_main(void)
 
   /* fast forward simulator loop, performs functional simulation for
      FASTFWD_COUNT insts, then turns on performance (timing) simulation */
-  if (fastfwd_count > 0)
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//  if (fastfwd_count > 0)
+//    {
+//      int icount;
+
+fastfwd_count = (unsigned long) simpoint * simpoint_interval;
+max_insts = simpoint_interval;
+//debug
+fprintf(stderr, "simpoint: %d\n", simpoint);
+fprintf(stderr, "simpoint_interval: %d\n", simpoint_interval);
+fprintf(stderr, "fastfwd_count: %lu\n", fastfwd_count);
+fprintf(stderr, "max_insts: %d\n", max_insts);
+
+  if (fastfwd_count != 0)
     {
-      int icount;
+      unsigned long icount;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
       md_inst_t inst;			/* actual instruction bits */
       enum md_opcode op;		/* decoded opcode enum */
       md_addr_t target_PC;		/* actual next/target PC address */
@@ -4790,6 +5337,16 @@ sim_main(void)
 	  regs.regs_PC = regs.regs_NPC;
 	  regs.regs_NPC += sizeof(md_inst_t);
 	}
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//debug
+ fprintf(stderr, "icount: %lu \n", icount);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
     }
 
   fprintf(stderr, "sim: ** starting performance simulation **\n");

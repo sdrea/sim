@@ -1,0 +1,13 @@
+SIM_PATH=/home/sdrea/Desktop/sim/sim-outorder
+CFG_PATH=/home/sdrea/Desktop/sim/config/baseline.cfg
+INT=100000000
+SP=10
+
+$SIM_PATH \
+-config $CFG_PATH \
+-interval $INT \
+-simpoint $SP \
+/home/sdrea/sp2k/164.gzip/gzip \
+/home/sdrea/sp2k/164.gzip/input.graphic \
+2 \
+> /home/sdrea/results/other/gzip.r
