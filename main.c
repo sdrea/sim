@@ -1,12 +1,3 @@
-// Variant of SimpleScalar developed for modelling cache compression and prefetching
-// Based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
-//
-// Changes are tagged with //sdrea
-//
-// Sean Rea
-// sdrea@lakeheadu.ca
-// 2016-2017
-
 /* main.c - main line routines */
 
 /* SimpleScalar(TM) Tool Suite
