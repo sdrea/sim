@@ -1,3 +1,13 @@
+// Variant of SimpleScalar developed for modelling cache compression and prefetching
+// Based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
+//
+// changes wrapped in //sdrea-begin ... //sdrea-end
+//
+// Sean Rea
+// sdrea@lakeheadu.ca
+// 2016-2017
+////////////////////////////////////////////////////////////////
+
 /* I inclued this copyright since we're using Cacti for some stuff */
 
 /*------------------------------------------------------------
@@ -2319,6 +2329,12 @@ void calculate_power(power)
   power->regfile_power_nobit = power->regfile_decoder + 
     power->regfile_wordline + power->regfile_senseamp;
 
-  dump_power_stats(power);
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//  dump_power_stats(power);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
 }
