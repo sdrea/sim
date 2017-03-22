@@ -86,6 +86,15 @@
 /* added for Wattch */
 #include "power.h"
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+#include <time.h>
+#include <string.h>
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 /*
  * This file implements a very detailed out-of-order issue superscalar
  * processor with a two-level memory system and speculative execution support.
@@ -117,6 +126,10 @@ static unsigned int max_insts;
 static unsigned long fastfwd_count;
 static int simpoint;
 static int simpoint_interval;
+static char *vcd;
+static char *vcdpath;
+char fbuf[256];
+FILE *fp;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -528,13 +541,7 @@ static double dl2_cacti_data_read_dynamic_energy;
 static double dl2_cacti_data_write_dynamic_energy;
 static int dl2_decompression_latency;
 
-static double compressor_static_power;
-static double compressor_dynamic_power;
-static double compressor_delay;
 static int compressor_frequency;
-static double decompressor_static_power;
-static double decompressor_dynamic_power;
-static double decompressor_delay;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -769,6 +776,14 @@ sim_reg_options(struct opt_odb_t *odb)
   opt_reg_int(odb, "-simpoint", "Simpoint",
 	      &simpoint, /* default */0,
 	      /* print */TRUE, /* format */NULL);
+
+  opt_reg_string(odb, "-vcd_path",
+		 "vcd file path",
+		 &vcdpath, "./", /* print */TRUE, NULL);
+
+  opt_reg_string(odb, "-vcd_suffix",
+		 "vcd suffix",
+		 &vcd, "", /* print */TRUE, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1202,34 +1217,9 @@ sim_reg_options(struct opt_odb_t *odb)
                 "dl2 decompression latency",
                 &dl2_decompression_latency, 0, TRUE, NULL);
 
-  opt_reg_double(odb, "-cache:compressor:static-power",
-                "compressor static power (nW)",
-                &compressor_static_power, 0, TRUE, NULL);
-
-  opt_reg_double(odb, "-cache:compressor:dynamic-power",
-                "compressor dynamic power (nW)",
-                &compressor_dynamic_power, 0, TRUE, NULL);
-
-  opt_reg_double(odb, "-cache:decompressor:static-power",
-                "decompressor static power (nW)",
-                &decompressor_static_power, 0, TRUE, NULL);
-
-  opt_reg_double(odb, "-cache:decompressor:dynamic-power",
-                "decompressor dynamic power (nW)",
-                &decompressor_dynamic_power, 0, TRUE, NULL);
-
-  opt_reg_double(odb, "-cache:compressor:delay",
-                "compressor delay (ps)",
-                &compressor_delay, 0, TRUE, NULL);
-
   opt_reg_int(odb, "-cache:compressor:frequency",
                 "compressor frequency (GHz)",
                 &compressor_frequency, 0, TRUE, NULL);
-
-
-  opt_reg_double(odb, "-cache:decompressor:delay",
-                "decompressor delay (ps)",
-                &decompressor_delay, 0, TRUE, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1577,12 +1567,6 @@ last->sets[i].tag = 0;
       cache_il1->cacti_data_write_dynamic_energy = il1_cacti_data_write_dynamic_energy;
       cache_il1->decompression_latency = il1_decompression_latency;
 
-  cache_il1->compressor_static_power = compressor_static_power;
-  cache_il1->compressor_dynamic_power = compressor_dynamic_power;
-  cache_il1->decompressor_static_power = decompressor_static_power;
-  cache_il1->decompressor_dynamic_power = decompressor_dynamic_power;
-  cache_il1->compressor_delay = compressor_delay;
-  cache_il1->decompressor_delay = decompressor_delay;
   cache_il1->compressor_frequency = compressor_frequency;
 
       cache_dl1->bdi_compress = dl1_bdi_compress;
@@ -1595,12 +1579,6 @@ last->sets[i].tag = 0;
       cache_dl1->cacti_data_write_dynamic_energy = dl1_cacti_data_write_dynamic_energy;
       cache_dl1->decompression_latency = dl1_decompression_latency;
 
-  cache_dl1->compressor_static_power = compressor_static_power;
-  cache_dl1->compressor_dynamic_power = compressor_dynamic_power;
-  cache_dl1->decompressor_static_power = decompressor_static_power;
-  cache_dl1->decompressor_dynamic_power = decompressor_dynamic_power;
-  cache_dl1->compressor_delay = compressor_delay;
-  cache_dl1->decompressor_delay = decompressor_delay;
   cache_dl1->compressor_frequency = compressor_frequency;
 
       cache_il2->bdi_compress = il2_bdi_compress;
@@ -1613,12 +1591,6 @@ last->sets[i].tag = 0;
       cache_il2->cacti_data_write_dynamic_energy = il2_cacti_data_write_dynamic_energy;
       cache_il2->decompression_latency = il2_decompression_latency;
 
-  cache_il2->compressor_static_power = compressor_static_power;
-  cache_il2->compressor_dynamic_power = compressor_dynamic_power;
-  cache_il2->decompressor_static_power = decompressor_static_power;
-  cache_il2->decompressor_dynamic_power = decompressor_dynamic_power;
-  cache_il2->compressor_delay = compressor_delay;
-  cache_il2->decompressor_delay = decompressor_delay;
   cache_il2->compressor_frequency = compressor_frequency;
 
       cache_dl2->bdi_compress = dl2_bdi_compress;
@@ -1631,12 +1603,6 @@ last->sets[i].tag = 0;
       cache_dl2->cacti_data_write_dynamic_energy = dl2_cacti_data_write_dynamic_energy;
       cache_dl2->decompression_latency = dl2_decompression_latency;
 
-  cache_dl2->compressor_static_power = compressor_static_power;
-  cache_dl2->compressor_dynamic_power = compressor_dynamic_power;
-  cache_dl2->decompressor_static_power = decompressor_static_power;
-  cache_dl2->decompressor_dynamic_power = decompressor_dynamic_power;
-  cache_dl2->compressor_delay = compressor_delay;
-  cache_dl2->decompressor_delay = decompressor_delay;
   cache_dl2->compressor_frequency = compressor_frequency;
 
 ////////////////////////////////////////////////////////////////
@@ -1826,23 +1792,33 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 
   stat_reg_int(sdb, "interval",
 	       "simpoint interval",
-	       &simpoint_interval, simpoint_interval, NULL);
+	       &simpoint_interval, simpoint_interval, "%32d");
 
   stat_reg_int(sdb, "simpoint",
 	       "simpoint",
-	       &simpoint, simpoint, NULL);
+	       &simpoint, simpoint, "%32d");
 
-  stat_reg_counter(sdb, "instructions",
+  stat_reg_counter(sdb, "sim_num_insn",
 		   "total number of instructions committed",
-		   &sim_num_insn, sim_num_insn, NULL);
+		   &sim_num_insn, sim_num_insn, "%32d");
 
-  stat_reg_counter(sdb, "cycles",
+  stat_reg_counter(sdb, "sim_cycle",
 		   "total simulation time in cycles",
-		   &sim_cycle, /* initial value */0, /* format */NULL);
+		   &sim_cycle, /* initial value */0, /* format */"%32d");
 
-  stat_reg_formula(sdb, "CPI",
+  stat_reg_formula(sdb, "sim_CPI",
 		   "cycles per instruction",
-		   "cycles / instructions", /* format */NULL);
+		   "sim_cycle / sim_num_insn", /* format */"%32.4f");
+
+stat_reg_formula(sdb, "sim_IPC",
+		   "instructions per cycle",
+		   "sim_num_insn / sim_cycle", /* format */"%32.4f");
+
+  stat_reg_counter(sdb, "dl1_misses",
+		   "total number of dl1 misses",
+		   &cache_dl1->misses, cache_dl1->misses, "%32d");
+
+  cache_reg_stats(cache_dl1, sdb);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -5304,8 +5280,8 @@ sim_main(void)
 
 //      fprintf(stderr, "sim: ** fast forwarding %d insts **\n", fastfwd_count);
 
-      fprintf(stderr, "# simpoint interval is %d\n", simpoint_interval);
-      fprintf(stderr, "# seeking to simpoint %d\n", simpoint);
+      fprintf(stderr, "# simpoint interval    %10d\n", simpoint_interval);
+      fprintf(stderr, "# seeking to simpoint  %10d\n", simpoint);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -5377,6 +5353,82 @@ sim_main(void)
 //  fprintf(stderr, "sim: ** starting performance simulation **\n");
 
   fprintf(stderr, "# starting performance simulation\n");
+
+time_t now;
+now = time(NULL);
+struct tm *ts;
+ts = localtime(&now);
+char tbuf[80];
+strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S %Z\n", ts);
+
+strcpy(fbuf, vcdpath);
+strcat(fbuf, "dl1_compressor.vcd");
+strcat(fbuf, vcd);
+fp = fopen(fbuf, "w+");
+fprintf(fp, "$date\n");
+fprintf(fp, tbuf);
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$version\n");
+fprintf(fp, "VCD version 0.1\n");
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$timescale\n");
+fprintf(fp, "1 ns\n");
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$scope\n");
+fprintf(fp, "module compressor\n");
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$var wire 512 ! x $end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$upscope $end\n");
+fprintf(fp, "$enddefinitions $end\n");
+fprintf(fp, "\n");
+fprintf(fp, "#0\n");
+fprintf(fp, "$dumpvars\n");
+fprintf(fp, "b0 !\n");
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fclose(fp);
+
+
+strcpy(fbuf, vcdpath);
+strcat(fbuf, "dl1_decompressor.vcd");
+strcat(fbuf, vcd);
+fp = fopen(fbuf, "w+");
+fprintf(fp, "$date\n");
+fprintf(fp, tbuf);
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$version\n");
+fprintf(fp, "VCD version 0.1\n");
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$timescale\n");
+fprintf(fp, "1 ns\n");
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$scope\n");
+fprintf(fp, "module decompressor\n");
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$var wire 512 ! x $end\n");
+fprintf(fp, "$var wire 1 # carry $end\n");
+fprintf(fp, "$var wire 4 $ encoding $end\n");
+fprintf(fp, "\n");
+fprintf(fp, "$upscope $end\n");
+fprintf(fp, "$enddefinitions $end\n");
+fprintf(fp, "\n");
+fprintf(fp, "#0\n");
+fprintf(fp, "$dumpvars\n");
+fprintf(fp, "b0 !\n");
+fprintf(fp, "b0 #\n");
+fprintf(fp, "b0000 $\n");
+fprintf(fp, "$end\n");
+fprintf(fp, "\n");
+fclose(fp);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end

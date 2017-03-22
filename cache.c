@@ -99,8 +99,7 @@ static counter_t count_encode_1111_uncompressed = 0;
 static counter_t size_uncompressed = 0;
 static counter_t size_compressed = 0;
 
-FILE *compressorVCD;
-FILE *decompressorVCD;
+FILE *fp;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -399,84 +398,6 @@ cp->sim_data_read_dynamic_energy = 0;
 cp->sim_data_write_dynamic_energy = 0;
 cp->last_cache_access = 0;
 
-cp->sim_compressor_static_power = 0;
-cp->sim_compressor_dynamic_power = 0;
-cp->sim_decompressor_static_power = 0;
-cp->sim_decompressor_dynamic_power = 0;
-
-time_t now;
-now = time(NULL);
-struct tm *ts;
-ts = localtime(&now);
-char tbuf[80];
-strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S %Z\n", ts);
-
-char cfnVCD[32] = "vcd_compressor_";
-strcat(cfnVCD, name);
-compressorVCD = fopen(cfnVCD, "w+");
-fprintf(compressorVCD, "$date\n");
-fprintf(compressorVCD, tbuf);
-fprintf(compressorVCD, "$end\n");
-fprintf(compressorVCD, "\n");
-fprintf(compressorVCD, "$version\n");
-fprintf(compressorVCD, "ReaVCD version 0.1\n");
-fprintf(compressorVCD, "$end\n");
-fprintf(compressorVCD, "\n");
-fprintf(compressorVCD, "$timescale\n");
-fprintf(compressorVCD, "1 ns\n");
-fprintf(compressorVCD, "$end\n");
-fprintf(compressorVCD, "\n");
-fprintf(compressorVCD, "$scope\n");
-fprintf(compressorVCD, "module compressor\n");
-fprintf(compressorVCD, "$end\n");
-fprintf(compressorVCD, "\n");
-fprintf(compressorVCD, "$var wire 512 ! x $end\n");
-fprintf(compressorVCD, "\n");
-fprintf(compressorVCD, "$upscope $end\n");
-fprintf(compressorVCD, "$enddefinitions $end\n");
-fprintf(compressorVCD, "\n");
-fprintf(compressorVCD, "#0\n");
-fprintf(compressorVCD, "$dumpvars\n");
-fprintf(compressorVCD, "b0 !\n");
-fprintf(compressorVCD, "$end\n");
-fprintf(compressorVCD, "\n");
-fclose(compressorVCD);
-
-char dfnVCD[32] = "vcd_decompressor_";
-strcat(dfnVCD, name);
-decompressorVCD = fopen(dfnVCD, "w+");
-fprintf(decompressorVCD, "$date\n");
-fprintf(decompressorVCD, tbuf);
-fprintf(decompressorVCD, "$end\n");
-fprintf(decompressorVCD, "\n");
-fprintf(decompressorVCD, "$version\n");
-fprintf(decompressorVCD, "ReaVCD version 0.1\n");
-fprintf(decompressorVCD, "$end\n");
-fprintf(decompressorVCD, "\n");
-fprintf(decompressorVCD, "$timescale\n");
-fprintf(decompressorVCD, "1 ns\n");
-fprintf(decompressorVCD, "$end\n");
-fprintf(decompressorVCD, "\n");
-fprintf(decompressorVCD, "$scope\n");
-fprintf(decompressorVCD, "module decompressor\n");
-fprintf(decompressorVCD, "$end\n");
-fprintf(decompressorVCD, "\n");
-fprintf(decompressorVCD, "$var wire 512 ! x $end\n");
-fprintf(decompressorVCD, "$var wire 1 # carry $end\n");
-fprintf(decompressorVCD, "$var wire 4 $ encoding $end\n");
-fprintf(decompressorVCD, "\n");
-fprintf(decompressorVCD, "$upscope $end\n");
-fprintf(decompressorVCD, "$enddefinitions $end\n");
-fprintf(decompressorVCD, "\n");
-fprintf(decompressorVCD, "#0\n");
-fprintf(decompressorVCD, "$dumpvars\n");
-fprintf(decompressorVCD, "b0 !\n");
-fprintf(decompressorVCD, "b0 #\n");
-fprintf(decompressorVCD, "b0000 $\n");
-fprintf(decompressorVCD, "$end\n");
-fprintf(decompressorVCD, "\n");
-fclose(decompressorVCD);
-
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -586,6 +507,7 @@ void
 cache_reg_stats(struct cache_t *cp,	/* cache instance */
 		struct stat_sdb_t *sdb)	/* stats database */
 {
+
   char buf[512], buf1[512], *name;
 
   /* get a name for this cache */
@@ -594,34 +516,128 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
   else
     name = cp->name;
 
-  sprintf(buf, "%s.accesses", name);
-  sprintf(buf1, "%s.hits + %s.misses", name, name);
-  stat_reg_formula(sdb, buf, "total number of accesses", buf1, "%12.0f");
-  sprintf(buf, "%s.hits", name);
-  stat_reg_counter(sdb, buf, "total number of hits", &cp->hits, 0, NULL);
-  sprintf(buf, "%s.misses", name);
-  stat_reg_counter(sdb, buf, "total number of misses", &cp->misses, 0, NULL);
-  sprintf(buf, "%s.replacements", name);
-  stat_reg_counter(sdb, buf, "total number of replacements",
-		 &cp->replacements, 0, NULL);
-  sprintf(buf, "%s.writebacks", name);
-  stat_reg_counter(sdb, buf, "total number of writebacks",
-		 &cp->writebacks, 0, NULL);
-  sprintf(buf, "%s.invalidations", name);
-  stat_reg_counter(sdb, buf, "total number of invalidations",
-		 &cp->invalidations, 0, NULL);
-  sprintf(buf, "%s.miss_rate", name);
-  sprintf(buf1, "%s.misses / %s.accesses", name, name);
-  stat_reg_formula(sdb, buf, "miss rate (i.e., misses/ref)", buf1, NULL);
-  sprintf(buf, "%s.repl_rate", name);
-  sprintf(buf1, "%s.replacements / %s.accesses", name, name);
-  stat_reg_formula(sdb, buf, "replacement rate (i.e., repls/ref)", buf1, NULL);
-  sprintf(buf, "%s.wb_rate", name);
-  sprintf(buf1, "%s.writebacks / %s.accesses", name, name);
-  stat_reg_formula(sdb, buf, "writeback rate (i.e., wrbks/ref)", buf1, NULL);
-  sprintf(buf, "%s.inv_rate", name);
-  sprintf(buf1, "%s.invalidations / %s.accesses", name, name);
-  stat_reg_formula(sdb, buf, "invalidation rate (i.e., invs/ref)", buf1, NULL);
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//  sprintf(buf, "%s.accesses", name);
+//  sprintf(buf1, "%s.hits + %s.misses", name, name);
+//  stat_reg_formula(sdb, buf, "total number of accesses", buf1, "%12.0f");
+//  sprintf(buf, "%s.hits", name);
+//  stat_reg_counter(sdb, buf, "total number of hits", &cp->hits, 0, NULL);
+//  sprintf(buf, "%s.misses", name);
+//  stat_reg_counter(sdb, buf, "total number of misses", &cp->misses, 0, NULL);
+//  sprintf(buf, "%s.replacements", name);
+//  stat_reg_counter(sdb, buf, "total number of replacements",
+//		 &cp->replacements, 0, NULL);
+//  sprintf(buf, "%s.writebacks", name);
+//  stat_reg_counter(sdb, buf, "total number of writebacks",
+//		 &cp->writebacks, 0, NULL);
+//  sprintf(buf, "%s.invalidations", name);
+//  stat_reg_counter(sdb, buf, "total number of invalidations",
+//		 &cp->invalidations, 0, NULL);
+//  sprintf(buf, "%s.miss_rate", name);
+//  sprintf(buf1, "%s.misses / %s.accesses", name, name);
+//  stat_reg_formula(sdb, buf, "miss rate (i.e., misses/ref)", buf1, NULL);
+//  sprintf(buf, "%s.repl_rate", name);
+//  sprintf(buf1, "%s.replacements / %s.accesses", name, name);
+//  stat_reg_formula(sdb, buf, "replacement rate (i.e., repls/ref)", buf1, NULL);
+//  sprintf(buf, "%s.wb_rate", name);
+//  sprintf(buf1, "%s.writebacks / %s.accesses", name, name);
+//  stat_reg_formula(sdb, buf, "writeback rate (i.e., wrbks/ref)", buf1, NULL);
+//  sprintf(buf, "%s.inv_rate", name);
+//  sprintf(buf1, "%s.invalidations / %s.accesses", name, name);
+//  stat_reg_formula(sdb, buf, "invalidation rate (i.e., invs/ref)", buf1, NULL);
+
+if(cp->bdi_check)
+
+{
+stat_reg_counter(sdb, "count_check_lines", "Cache lines checked for compressibility", &count_check_lines, 0, "%32d");
+stat_reg_counter(sdb, "count_compressible_any", "Count of cache lines compressible", &count_compressible_any, 0, "%32d");
+stat_reg_counter(sdb, "count_compressible_0000_zeros", "Count of cache lines compressible as zeros", &count_compressible_0000_zeros, 0, "%25d");
+stat_reg_counter(sdb, "count_compressible_0001_repeats", "Count of cache lines compressible as repeating values", &count_compressible_0001_repeats, 0, "%23d");
+stat_reg_counter(sdb, "count_compressible_0010_b8d1", "Count of cache lines compressible as b8d1", &count_compressible_0010_b8d1, 0, "%26d");
+stat_reg_counter(sdb, "count_compressible_0011_b8d2", "Count of cache lines compressible as b8d2", &count_compressible_0011_b8d2, 0, "%26d");
+stat_reg_counter(sdb, "count_compressible_0100_b8d4", "Count of cache lines compressible as b8d4", &count_compressible_0100_b8d4, 0, "%26d");
+stat_reg_counter(sdb, "count_compressible_0101_b4d1", "Count of cache lines compressible as b4d1", &count_compressible_0101_b4d1, 0, "%26d");
+stat_reg_counter(sdb, "count_compressible_0110_b4d2", "Count of cache lines compressible as b4d2", &count_compressible_0110_b4d2, 0, "%26d");
+stat_reg_counter(sdb, "count_compressible_0111_b2d1", "Count of cache lines compressible as b2d1", &count_compressible_0111_b2d1, 0, "%26d");
+stat_reg_formula(sdb, "rate_compressible_any", "Percentage of cache lines compressible",     "100 * count_compressible_any / count_check_lines", "%32.1f");
+stat_reg_formula(sdb, "rate_compressible_0000_zeros", "Percentage of cache lines compressible as zeros",     "100 * count_compressible_0000_zeros / count_check_lines", "%26.1f");
+stat_reg_formula(sdb, "rate_compressible_0001_repeats", "Percentage of cache lines compressible as repeats", "100 * count_compressible_0001_repeats / count_check_lines", "%24.1f");
+stat_reg_formula(sdb, "rate_compressible_0010_b8d1", "Percentage of cache lines compressible as b8d1",       "100 * count_compressible_0010_b8d1 / count_check_lines", "%27.1f");
+stat_reg_formula(sdb, "rate_compressible_0011_b8d2", "Percentage of cache lines compressible as b8d2",       "100 * count_compressible_0011_b8d2 / count_check_lines", "%27.1f");
+stat_reg_formula(sdb, "rate_compressible_0100_b8d4", "Percentage of cache lines compressible as b8d4",       "100 * count_compressible_0100_b8d4 / count_check_lines", "%27.1f");
+stat_reg_formula(sdb, "rate_compressible_0101_b4d1", "Percentage of cache lines compressible as b4d1",       "100 * count_compressible_0101_b4d1 / count_check_lines", "%27.1f");
+stat_reg_formula(sdb, "rate_compressible_0110_b4d2", "Percentage of cache lines compressible as b4d2",       "100 * count_compressible_0110_b4d2 / count_check_lines", "%27.1f");
+stat_reg_formula(sdb, "rate_compressible_0111_b2d1", "Percentage of cache lines compressible as b2d1",       "100 * count_compressible_0111_b2d1 / count_check_lines", "%27.1f");
+}
+
+
+if(cp->bdi_compress)
+
+{
+stat_reg_counter(sdb, "count_encode_lines", "Cache lines checked for compression", &count_encode_lines, 0, "%32d");
+stat_reg_counter(sdb, "count_encode_0000_zeros", "Cache blocks compressed as zeros", &count_encode_0000_zeros, 0, "%31d");
+stat_reg_counter(sdb, "count_encode_0001_repeats", "Cache blocks compressed as repeating values", &count_encode_0001_repeats, 0, "%29d");
+stat_reg_counter(sdb, "count_encode_0010_b8d1", "Cache blocks compressed as base 8 delta 1", &count_encode_0010_b8d1, 0, "%32d");
+stat_reg_counter(sdb, "count_encode_0011_b8d2", "Cache blocks compressed as base 8 delta 2", &count_encode_0011_b8d2, 0,"%32d");
+stat_reg_counter(sdb, "count_encode_0100_b8d4", "Cache blocks compressed as base 8 delta 4", &count_encode_0100_b8d4, 0, "%32d");
+stat_reg_counter(sdb, "count_encode_0101_b4d1", "Cache blocks compressed as base 4 delta 1", &count_encode_0101_b4d1, 0, "%32d");
+stat_reg_counter(sdb, "count_encode_0110_b4d2", "Cache blocks compressed as base 4 delta 2", &count_encode_0110_b4d2, 0, "%32d");
+stat_reg_counter(sdb, "count_encode_0111_b2d1", "Cache blocks compressed as base 2 delta 1", &count_encode_0111_b2d1, 0, "%32d");
+stat_reg_counter(sdb, "count_encode_1111_uncompressed", "Uncompressed cache lines", &count_encode_1111_uncompressed, 0, "%24d");
+stat_reg_formula(sdb, "rate_encode_0000_zeros", "Percentage of cache lines compressed as zeros",     "100 * count_encode_0000_zeros / count_encode_lines", "%32.1f");
+stat_reg_formula(sdb, "rate_encode_0001_repeats", "Percentage of cache lines compressed as repeats", "100 * count_encode_0001_repeats / count_encode_lines", "%30.1f");
+stat_reg_formula(sdb, "rate_encode_0010_b8d1", "Percentage of cache lines compressed as b8d1",       "100 * count_encode_0010_b8d1 / count_encode_lines", "%32.1f");
+stat_reg_formula(sdb, "rate_encode_0011_b8d2", "Percentage of cache lines compressed as b8d2",       "100 * count_encode_0011_b8d2 / count_encode_lines", "%32.1f");
+stat_reg_formula(sdb, "rate_encode_0100_b8d4", "Percentage of cache lines compressed as b8d4",       "100 * count_encode_0100_b8d4 / count_encode_lines", "%32.1f");
+stat_reg_formula(sdb, "rate_encode_0101_b4d1", "Percentage of cache lines compressed as b4d1",       "100 * count_encode_0101_b4d1 / count_encode_lines", "%32.1f");
+stat_reg_formula(sdb, "rate_encode_0110_b4d2", "Percentage of cache lines compressed as b4d2",       "100 * count_encode_0110_b4d2 / count_encode_lines", "%32.1f");
+stat_reg_formula(sdb, "rate_encode_0111_b2d1", "Percentage of cache lines compressed as b2d1",       "100 * count_encode_0111_b2d1 / count_encode_lines", "%32.1f");
+stat_reg_counter(sdb, "size_compressed", "Size of compressed cache lines", &size_compressed, 0, "%32d");
+stat_reg_counter(sdb, "size_uncompressed", "Size of uncompressed cache lines", &size_uncompressed, 0, "%32d");
+stat_reg_formula(sdb, "compression_ratio", "Compression Ratio",       "size_uncompressed / size_compressed", "%32.5f");
+}
+
+  sprintf(buf, "%s_sim_tag_static_power", name);
+  sprintf(buf1, "%s Cache Tag Leakage Power (mW-cycles)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_tag_static_power, 0, "%30.6f");
+
+  sprintf(buf, "%s_sim_tag_read_dynamic_energy", name);
+  sprintf(buf1, "%s Cache Tag Dynamic Read Energy (nJ)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_tag_read_dynamic_energy, 0, "%23.6f");
+
+  sprintf(buf, "%s_sim_tag_write_dynamic_energy", name);
+  sprintf(buf1, "%s Cache Tag Dynamic Write Energy (nJ)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_tag_write_dynamic_energy, 0, "%22.6f");
+
+  sprintf(buf, "%s_sim_data_static_power", name);
+  sprintf(buf1, "%s Cache Data Leakage Power (mW-cycles)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_data_static_power, 0, "%29.6f");
+
+  sprintf(buf, "%s_sim_data_read_dynamic_energy", name);
+  sprintf(buf1, "%s Cache Data Dynamic Read Energy (nJ)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_data_read_dynamic_energy, 0, "%22.6f");
+
+  sprintf(buf, "%s_sim_data_write_dynamic_energy", name);
+  sprintf(buf1, "%s Cache Data Dynamic Write Energy (nJ)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_data_write_dynamic_energy, 0, "%21.6f");
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 }
 
 /* print cache stats */
@@ -1032,42 +1048,6 @@ else
 
   cp->sim_tag_static_power += (now - cp->last_cache_access) * cp->cacti_tag_static_power;
   cp->sim_data_static_power += (now - cp->last_cache_access) * cp->cacti_data_static_power;
-  cp->sim_compressor_static_power += (now - cp->last_cache_access) * cp->compressor_static_power;
-  cp->sim_decompressor_static_power += (now - cp->last_cache_access) * cp->decompressor_static_power;
-
-  cp->sim_compressor_dynamic_power += (cp->compressor_dynamic_power * cp->compressor_delay / 1000000);
-
-  //TODO 2017 Compressor dynamic energy ... OR VCD output (input of the compressor will change)
-
-  char vcdbuf[32] = "vcd_compressor_";
-  strcat(vcdbuf, cp->name);
-  compressorVCD = fopen(vcdbuf, "a");
-  char vcdbuf1[32];
-  sprintf(vcdbuf1, "#%d", cp->compressor_frequency*now);
-
-  
-  
-
-  char vcdbuf2[516];
-  vcdbuf2[0] = 'b';
-  vcdbuf2[513] = ' ';
-  vcdbuf2[514] = '!';
-  vcdbuf2[515] = '\0';
-
-  for (i = 0; i < 64; i++) {
-  for (j = 0; j < 8; j++) {
-        vcdbuf2[504-(i*8)+8-j]  = (vcddb[i] & 1) + '0';
-        vcddb[i] >>= 1;
-    }
-}
-
-  /* disable for now - large files
-  fprintf(compressorVCD, vcdbuf1);
-  fprintf(compressorVCD, "\n");
-  fprintf(compressorVCD, vcdbuf2);
-  fprintf(compressorVCD, "\n");
-  */
-  fclose(compressorVCD);
 
   // On cache miss, tag read will occur for read and write operation
 
@@ -1089,6 +1069,30 @@ else
                     }
 
   cp->last_cache_access = now;
+
+  char vcdbuf1[32];
+  sprintf(vcdbuf1, "#%d", cp->compressor_frequency*now);
+
+  char vcdbuf2[516];
+  vcdbuf2[0] = 'b';
+  vcdbuf2[513] = ' ';
+  vcdbuf2[514] = '!';
+  vcdbuf2[515] = '\0';
+
+  for (i = 0; i < 64; i++) {
+  for (j = 0; j < 8; j++) {
+        vcdbuf2[504-(i*8)+8-j]  = (vcddb[i] & 1) + '0';
+        vcddb[i] >>= 1;
+  }}
+
+  /* disable for now - large files
+  fp = fopen(dl1_compressor.vcd, "a");
+  fprintf(fp, vcdbuf1);
+  fprintf(fp, "\n");
+  fprintf(fp, vcdbuf2);
+  fprintf(fp, "\n");
+  fclose(fp);
+  */
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1453,10 +1457,10 @@ if (mem != NULL)
 }
 if (bdi_size != 64) {
 
-  char dvcdbuf[32] = "vcd_decompressor_";
-  strcat(dvcdbuf, cp->name);
-  decompressorVCD = fopen(dvcdbuf, "a");
-  char dvcdbuf1[32];
+
+  
+ 
+ char dvcdbuf1[32];
   sprintf(dvcdbuf1, "#%d", cp->compressor_frequency*now);
 
   //db[0-63].. is the cache line being read from memory / written into cache / compressed
@@ -1486,24 +1490,23 @@ if (bdi_size != 64) {
   dvcdbuf3[6] = '$';
   dvcdbuf3[7] = '\0';
 
+
   /* disable for now - large files
-  fprintf(decompressorVCD, dvcdbuf1);
-  fprintf(decompressorVCD, "\n");
-  fprintf(decompressorVCD, dvcdbuf2);
-  fprintf(decompressorVCD, "\n");
-  fprintf(decompressorVCD, dvcdbuf3);
-  fprintf(decompressorVCD, "\n");
+  fp = fopen("dl1_decompressor.vcd", "a");
+  fprintf(fp, dvcdbuf1);
+  fprintf(fp, "\n");
+  fprintf(fp, dvcdbuf2);
+  fprintf(fp, "\n");
+  fprintf(fp, dvcdbuf3);
+  fprintf(fp, "\n");
+  fclose(fp);
   */
-  fclose(decompressorVCD);
 
 }
   // Static energy is updated every cache access, regardless of operation and hit result  
 
   cp->sim_tag_static_power += (now - cp->last_cache_access) * cp->cacti_tag_static_power;
   cp->sim_data_static_power += (now - cp->last_cache_access) * cp->cacti_data_static_power;
-  cp->sim_compressor_static_power += (now - cp->last_cache_access) * cp->compressor_static_power;
-  cp->sim_decompressor_static_power += (now - cp->last_cache_access) * cp->decompressor_static_power;
-
 
   // On cache hit, tag read will occur for read and write operation
 
@@ -1514,17 +1517,13 @@ if (bdi_size != 64) {
   if (cmd == Read) { 
 
     cp->sim_data_read_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_read_dynamic_energy;
-    cp->sim_decompressor_dynamic_power += (cp->decompressor_dynamic_power * cp->decompressor_delay / 1000000);
-  
 
   }
 
-  // On cache hit, write operation, there will be 0 tag writes (but a dirty bit write), 1 data write, 0 data reads
+  // On cache hit, write operation, there will be 0 tag writes, 1 data write, 0 data reads
 
   if (cmd == Write) {
                       cp->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_write_dynamic_energy;
-                      // todo - dirty bit
-		      cp->sim_compressor_dynamic_power += (cp->compressor_dynamic_power * cp->compressor_delay / 1000000);
                     }
 
   cp->last_cache_access = now;
@@ -1841,9 +1840,6 @@ if (mem != NULL)
 }
 if (bdi_size != 64) {
 
-  char dvcdbuf[32] = "vcd_decompressor_";
-  strcat(dvcdbuf, cp->name);
-  decompressorVCD = fopen(dvcdbuf, "a");
   char dvcdbuf1[32];
   sprintf(dvcdbuf1, "#%d", cp->compressor_frequency*now);
 
@@ -1875,23 +1871,22 @@ if (bdi_size != 64) {
   dvcdbuf3[7] = '\0';
 
   /* disable for now - large files
-  fprintf(decompressorVCD, dvcdbuf1);
-  fprintf(decompressorVCD, "\n");
-  fprintf(decompressorVCD, dvcdbuf2);
-  fprintf(decompressorVCD, "\n");
-  fprintf(decompressorVCD, dvcdbuf3);
-  fprintf(decompressorVCD, "\n");
+  fp = fopen("dl1_decompressor.vcd", "a");
+  fprintf(fp, dvcdbuf1);
+  fprintf(fp, "\n");
+  fprintf(fp, dvcdbuf2);
+  fprintf(fp, "\n");
+  fprintf(fp, dvcdbuf3);
+  fprintf(fp, "\n");
+  fclose(fp);
   */
-  fclose(decompressorVCD);
+
 
 }
   // Static energy is updated every cache access, regardless of operation and hit result  
 
   cp->sim_tag_static_power += (now - cp->last_cache_access) * cp->cacti_tag_static_power;
   cp->sim_data_static_power += (now - cp->last_cache_access) * cp->cacti_data_static_power;
-  cp->sim_compressor_static_power += (now - cp->last_cache_access) * cp->compressor_static_power;
-  cp->sim_decompressor_static_power += (now - cp->last_cache_access) * cp->decompressor_static_power;
-
 
   // On cache hit, tag read will occur for read and write operation
 
@@ -1902,8 +1897,6 @@ if (bdi_size != 64) {
   if (cmd == Read) { 
 
     cp->sim_data_read_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_read_dynamic_energy;
-    cp->sim_decompressor_dynamic_power += (cp->decompressor_dynamic_power * cp->decompressor_delay / 1000000);
-  
 
   }
 
@@ -1911,8 +1904,6 @@ if (bdi_size != 64) {
 
   if (cmd == Write) {
                       cp->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_write_dynamic_energy;
-                      // todo - dirty bit
-		      cp->sim_compressor_dynamic_power += (cp->compressor_dynamic_power * cp->compressor_delay / 1000000);
                     }
 
   cp->last_cache_access = now;

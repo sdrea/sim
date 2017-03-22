@@ -221,7 +221,7 @@ sim_print_stats(FILE *fd)		/* output stream */
 
 //  fprintf(fd, "\nsim: ** simulation statistics **\n");
 
-  fprintf(fd,   "#####################################\n");
+  fprintf(fd,   "#########################################################\n");
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -445,8 +445,7 @@ main(int argc, char **argv, char **envp)
 //  sim_aux_config(stderr);
 //  fprintf(stderr, "\n");
 
-  fprintf(stderr, "simulation started @ %s \n", s);
-  fprintf(stderr, "#############################################\n");
+  fprintf(stderr, "# %s \n", s);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
