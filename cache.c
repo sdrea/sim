@@ -641,8 +641,8 @@ stat_reg_formula(sdb, "compression_ratio", "Compression Ratio",       "size_unco
 stat_reg_counter(sdb, "vcd_lines_compressor", "Number of changes written to compressor VCD", &vcd_lines_compressor, 0, "%32d");
 stat_reg_counter(sdb, "vcd_lines_decompressor", "Number of changes written to decompressor VCD", &vcd_lines_decompressor, 0, "%32d");
 
-stat_reg_formula(sdb, "vcd_filesize_compressor", "Approximate VCD filesize for compressor", "2048.0 / vcd_lines_compressor", "%32.5f");
-stat_reg_formula(sdb, "vcd_filesize_decompressor", "Approximate VCD filesize for decompressor", "2048.0 / vcd_lines_decompressor", "%32.5f");
+stat_reg_formula(sdb, "vcd_filesize_compressor", "Approximate VCD filesize for compressor in MB", "(vcd_lines_compressor+204) / 1925", "%31.3f");
+stat_reg_formula(sdb, "vcd_filesize_decompressor", "Approximate VCD filesize for decompressor in MB", "(vcd_lines_decompressor+235) / 1900", "%29.3f");
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1090,15 +1090,15 @@ cache_access(struct cache_t *cp,	/* cache to access */
         vcddb[i] >>= 1;
   }}
 
-  /*fp = fopen(cbuf, "a");
-
+  /*
+  fp = fopen(cbuf, "a");
   fprintf(fp, vcdbuf1);
   fprintf(fp, "\n");
   fprintf(fp, vcdbuf2);
   fprintf(fp, "\n");
-
   fclose(fp);
   */
+
 vcd_lines_compressor++;
 
 }
@@ -1504,17 +1504,16 @@ if (bdi_size != 64) {
   dvcdbuf3[6] = '$';
   dvcdbuf3[7] = '\0';
 
-
-  /*fp = fopen(dbuf, "a");
-
+  /*
+  fp = fopen(dbuf, "a");
   fprintf(fp, dvcdbuf1);
   fprintf(fp, "\n");
   fprintf(fp, dvcdbuf2);
   fprintf(fp, "\n");
   fprintf(fp, dvcdbuf3);
   fprintf(fp, "\n");
-
-  fclose(fp);*/
+  fclose(fp);
+  */
 
 vcd_lines_decompressor++;
 
@@ -1888,16 +1887,16 @@ if (bdi_size != 64) {
   dvcdbuf3[6] = '$';
   dvcdbuf3[7] = '\0';
 
-  /*fp = fopen(dbuf, "a");
-
+  /*
+  fp = fopen(dbuf, "a");
   fprintf(fp, dvcdbuf1);
   fprintf(fp, "\n");
   fprintf(fp, dvcdbuf2);
   fprintf(fp, "\n");
   fprintf(fp, dvcdbuf3);
   fprintf(fp, "\n");
-
-  fclose(fp);*/
+  fclose(fp);
+  */
 
 vcd_lines_decompressor++;
 
