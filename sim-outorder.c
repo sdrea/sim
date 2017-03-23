@@ -128,7 +128,8 @@ static int simpoint;
 static int simpoint_interval;
 static char *vcd;
 static char *vcdpath;
-char fbuf[256];
+char cbuf[256];
+char dbuf[256];
 FILE *fp;
 
 ////////////////////////////////////////////////////////////////
@@ -583,7 +584,7 @@ dl1_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
 //      lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize,
 //			 /* now */now, /* pudata */NULL, /* repl addr */NULL);
 
-      lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, mem);
+      lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, NULL, NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -655,7 +656,7 @@ if (cache_il2)
 //      lat = cache_access(cache_il2, cmd, baddr, NULL, bsize,
 //			 /* now */now, /* pudata */NULL, /* repl addr */NULL);
 
-      lat = cache_access(cache_il2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, mem);
+      lat = cache_access(cache_il2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, NULL, NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -2684,7 +2685,7 @@ ruu_commit(void)
 //			events |= PEV_CACHEMISS;
 
 		      tmp_misses_dl1 = cache_dl1->misses;
-		      lat = cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3), NULL, 4, sim_cycle, NULL, NULL, mem);
+		      lat = cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
 		      if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
 
 
@@ -2707,7 +2708,7 @@ ruu_commit(void)
 //				     NULL, 4, sim_cycle, NULL, NULL);
 
 		      lat = cache_access(dtlb, Read, (LSQ[LSQ_head].addr & ~3),
-				     NULL, 4, sim_cycle, NULL, NULL, NULL);
+				     NULL, 4, sim_cycle, NULL, NULL, NULL, NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -3312,7 +3313,7 @@ ruu_issue(void)
 //				    events |= PEV_CACHEMISS;
 
 				  tmp_misses_dl1 = cache_dl1->misses;
-				  load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
+				  load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
 				  if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
 
 ////////////////////////////////////////////////////////////////
@@ -3342,7 +3343,7 @@ ruu_issue(void)
 
 			      tlb_lat =
 				cache_access(dtlb, Read, (rs->addr & ~3),
-					     NULL, 4, sim_cycle, NULL, NULL, NULL);
+					     NULL, 4, sim_cycle, NULL, NULL, NULL, NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -5008,7 +5009,7 @@ if (MD_OP_FLAGS(dvp_op) & F_STORE)
 //		last_inst_missed = TRUE;
 
 	      tmp_misses_il1 = cache_il1->misses;
-	      lat = cache_access(cache_il1, Read, IACOMPRESS(fetch_regs_PC), NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle, NULL, NULL, mem);
+	      lat = cache_access(cache_il1, Read, IACOMPRESS(fetch_regs_PC), NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle, NULL, NULL, NULL, NULL, NULL);
 	      if (cache_il1->misses > tmp_misses_il1) last_inst_missed = TRUE;
 
 ////////////////////////////////////////////////////////////////
@@ -5033,7 +5034,7 @@ if (MD_OP_FLAGS(dvp_op) & F_STORE)
 	      tlb_lat =
 		cache_access(itlb, Read, IACOMPRESS(fetch_regs_PC),
 			     NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle,
-			     NULL, NULL, NULL);
+			     NULL, NULL, NULL, NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -5361,10 +5362,10 @@ ts = localtime(&now);
 char tbuf[80];
 strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S %Z\n", ts);
 
-strcpy(fbuf, vcdpath);
-strcat(fbuf, "dl1_compressor.vcd");
-strcat(fbuf, vcd);
-fp = fopen(fbuf, "w+");
+strcpy(cbuf, vcdpath);
+strcat(cbuf, "dl1_compressor.vcd");
+strcat(cbuf, vcd);
+fp = fopen(cbuf, "w+");
 fprintf(fp, "$date\n");
 fprintf(fp, tbuf);
 fprintf(fp, "$end\n");
@@ -5394,10 +5395,10 @@ fprintf(fp, "\n");
 fclose(fp);
 
 
-strcpy(fbuf, vcdpath);
-strcat(fbuf, "dl1_decompressor.vcd");
-strcat(fbuf, vcd);
-fp = fopen(fbuf, "w+");
+strcpy(dbuf, vcdpath);
+strcat(dbuf, "dl1_decompressor.vcd");
+strcat(dbuf, vcd);
+fp = fopen(dbuf, "w+");
 fprintf(fp, "$date\n");
 fprintf(fp, tbuf);
 fprintf(fp, "$end\n");

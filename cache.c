@@ -99,6 +99,9 @@ static counter_t count_encode_1111_uncompressed = 0;
 static counter_t size_uncompressed = 0;
 static counter_t size_compressed = 0;
 
+static counter_t vcd_lines_compressor = 0;
+static counter_t vcd_lines_decompressor = 0;
+
 FILE *fp;
 
 ////////////////////////////////////////////////////////////////
@@ -635,6 +638,12 @@ stat_reg_formula(sdb, "compression_ratio", "Compression Ratio",       "size_unco
                buf1,
                &cp->sim_data_write_dynamic_energy, 0, "%21.6f");
 
+stat_reg_counter(sdb, "vcd_lines_compressor", "Number of changes written to compressor VCD", &vcd_lines_compressor, 0, "%32d");
+stat_reg_counter(sdb, "vcd_lines_decompressor", "Number of changes written to decompressor VCD", &vcd_lines_decompressor, 0, "%32d");
+
+stat_reg_formula(sdb, "vcd_filesize_compressor", "Approximate VCD filesize for compressor", "2048.0 / vcd_lines_compressor", "%32.5f");
+stat_reg_formula(sdb, "vcd_filesize_decompressor", "Approximate VCD filesize for decompressor", "2048.0 / vcd_lines_decompressor", "%32.5f");
+
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -678,6 +687,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
 //	     md_addr_t *repl_addr)	/* for address of replaced block */
 
 	     md_addr_t *repl_addr,	/* for address of replaced block */
+	     char *cbuf,
+	     char *dbuf,
              struct mem_t *mem)
 
 ////////////////////////////////////////////////////////////////
@@ -860,13 +871,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
               if (delta21 == 1)  { count_compressible_0111_b2d1++;}
               if (zeros == 1 || repeats == 1 || delta81 == 1 || delta82 == 1 || delta84 == 1 || delta41 == 1 || delta42 == 1 || delta21 == 1) {count_compressible_any++;}
             }
-}
-else
-{
 
-// mem is null in cache_access call
-
-}
 
   if (cp->bdi_compress)
     {
@@ -1085,14 +1090,24 @@ else
         vcddb[i] >>= 1;
   }}
 
-  /* disable for now - large files
-  fp = fopen(dl1_compressor.vcd, "a");
+  /*fp = fopen(cbuf, "a");
+
   fprintf(fp, vcdbuf1);
   fprintf(fp, "\n");
   fprintf(fp, vcdbuf2);
   fprintf(fp, "\n");
+
   fclose(fp);
   */
+vcd_lines_compressor++;
+
+}
+else
+{
+
+// mem is null in cache_access call
+
+}
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1197,6 +1212,7 @@ else
   /* **HIT** */
   cp->hits++;
 
+
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
@@ -1454,11 +1470,9 @@ if (mem != NULL)
               }
           break;
         }
-}
+
 if (bdi_size != 64) {
 
-
-  
  
  char dvcdbuf1[32];
   sprintf(dvcdbuf1, "#%d", cp->compressor_frequency*now);
@@ -1491,17 +1505,20 @@ if (bdi_size != 64) {
   dvcdbuf3[7] = '\0';
 
 
-  /* disable for now - large files
-  fp = fopen("dl1_decompressor.vcd", "a");
+  /*fp = fopen(dbuf, "a");
+
   fprintf(fp, dvcdbuf1);
   fprintf(fp, "\n");
   fprintf(fp, dvcdbuf2);
   fprintf(fp, "\n");
   fprintf(fp, dvcdbuf3);
   fprintf(fp, "\n");
-  fclose(fp);
-  */
 
+  fclose(fp);*/
+
+vcd_lines_decompressor++;
+
+}
 }
   // Static energy is updated every cache access, regardless of operation and hit result  
 
@@ -1580,6 +1597,7 @@ if (bdi_size != 64) {
   /* **FAST HIT** */
   cp->hits++;
 
+
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
@@ -1837,7 +1855,7 @@ if (mem != NULL)
               }
           break;
         }
-}
+
 if (bdi_size != 64) {
 
   char dvcdbuf1[32];
@@ -1870,18 +1888,20 @@ if (bdi_size != 64) {
   dvcdbuf3[6] = '$';
   dvcdbuf3[7] = '\0';
 
-  /* disable for now - large files
-  fp = fopen("dl1_decompressor.vcd", "a");
+  /*fp = fopen(dbuf, "a");
+
   fprintf(fp, dvcdbuf1);
   fprintf(fp, "\n");
   fprintf(fp, dvcdbuf2);
   fprintf(fp, "\n");
   fprintf(fp, dvcdbuf3);
   fprintf(fp, "\n");
-  fclose(fp);
-  */
 
+  fclose(fp);*/
 
+vcd_lines_decompressor++;
+
+}
 }
   // Static energy is updated every cache access, regardless of operation and hit result  
 

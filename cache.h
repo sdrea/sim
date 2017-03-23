@@ -327,6 +327,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
 //	     md_addr_t *repl_addr);	/* for address of replaced block */
 
 	     md_addr_t *repl_addr,	/* for address of replaced block */
+	     char *cbuf,
+	     char *dbuf,
              struct mem_t *mem);
 
 ////////////////////////////////////////////////////////////////
