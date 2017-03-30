@@ -5285,9 +5285,6 @@ sim_main(void)
 
 //      fprintf(stderr, "sim: ** fast forwarding %d insts **\n", fastfwd_count);
 
-      fprintf(stderr, "# simpoint interval    %10d\n", simpoint_interval);
-      fprintf(stderr, "# seeking to simpoint  %10d\n", simpoint);
-
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -5356,8 +5353,6 @@ sim_main(void)
 ////////////////////////////////////////////////////////////////
 
 //  fprintf(stderr, "sim: ** starting performance simulation **\n");
-
-  fprintf(stderr, "# starting performance simulation\n");
 
 time_t now;
 now = time(NULL);

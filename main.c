@@ -221,8 +221,6 @@ sim_print_stats(FILE *fd)		/* output stream */
 
 //  fprintf(fd, "\nsim: ** simulation statistics **\n");
 
-  fprintf(fd,   "#########################################################\n");
-
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -444,8 +442,6 @@ main(int argc, char **argv, char **envp)
 //  opt_print_options(sim_odb, stderr, /* short */TRUE, /* notes */TRUE);
 //  sim_aux_config(stderr);
 //  fprintf(stderr, "\n");
-
-  fprintf(stderr, "# %s \n", s);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
