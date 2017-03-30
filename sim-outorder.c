@@ -1799,6 +1799,10 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 	       "simpoint interval",
 	       &simpoint_interval, simpoint_interval, "%32d");
 
+  stat_reg_counter(sdb, "sim_num_insn",
+		   "total number of instructions committed",
+		   &sim_num_insn, sim_num_insn, NULL);
+
   stat_reg_counter(sdb, "sim_cycle",
 		   "total simulation time in cycles",
 		   &sim_cycle, /* initial value */0, /* format */"%32d");
