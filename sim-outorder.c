@@ -1791,21 +1791,13 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 //  ld_reg_stats(sdb);
 //  mem_reg_stats(mem, sdb);
 
-  stat_reg_int(sdb, "sim_elapsed_time",
-	       "total simulation time in seconds",
-	       &sim_elapsed_time, 0, NULL);
-
-  stat_reg_int(sdb, "interval",
-	       "simpoint interval",
-	       &simpoint_interval, simpoint_interval, "%32d");
-
   stat_reg_int(sdb, "simpoint",
 	       "simpoint",
 	       &simpoint, simpoint, "%32d");
 
-  stat_reg_counter(sdb, "sim_num_insn",
-		   "total number of instructions committed",
-		   &sim_num_insn, sim_num_insn, "%32d");
+  stat_reg_int(sdb, "interval",
+	       "simpoint interval",
+	       &simpoint_interval, simpoint_interval, "%32d");
 
   stat_reg_counter(sdb, "sim_cycle",
 		   "total simulation time in cycles",
