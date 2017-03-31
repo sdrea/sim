@@ -1624,172 +1624,172 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 {
   int i;
 
-//sdrea-begin
-////////////////////////////////////////////////////////////////
+  stat_reg_counter(sdb, "sim_num_insn",
+		   "total number of instructions committed",
+		   &sim_num_insn, sim_num_insn, NULL);
+  stat_reg_counter(sdb, "sim_num_refs",
+		   "total number of loads and stores committed",
+		   &sim_num_refs, 0, NULL);
+  stat_reg_counter(sdb, "sim_num_loads",
+		   "total number of loads committed",
+		   &sim_num_loads, 0, NULL);
+  stat_reg_formula(sdb, "sim_num_stores",
+		   "total number of stores committed",
+		   "sim_num_refs - sim_num_loads", NULL);
+  stat_reg_counter(sdb, "sim_num_branches",
+		   "total number of branches committed",
+		   &sim_num_branches, /* initial value */0, /* format */NULL);
+  stat_reg_int(sdb, "sim_elapsed_time",
+		    "total simulation time in seconds",
+	       &sim_elapsed_time, 0, NULL);
+  stat_reg_formula(sdb, "sim_inst_rate",
+		   "simulation speed (in insts/sec)",
+		   "sim_num_insn / sim_elapsed_time", NULL);
 
-//  stat_reg_counter(sdb, "sim_num_insn",
-//		   "total number of instructions committed",
-//		   &sim_num_insn, sim_num_insn, NULL);
-//  stat_reg_counter(sdb, "sim_num_refs",
-//		   "total number of loads and stores committed",
-//		   &sim_num_refs, 0, NULL);
-//  stat_reg_counter(sdb, "sim_num_loads",
-//		   "total number of loads committed",
-//		   &sim_num_loads, 0, NULL);
-//  stat_reg_formula(sdb, "sim_num_stores",
-//		   "total number of stores committed",
-//		   "sim_num_refs - sim_num_loads", NULL);
-//  stat_reg_counter(sdb, "sim_num_branches",
-//		   "total number of branches committed",
-//		   &sim_num_branches, /* initial value */0, /* format */NULL);
-//  stat_reg_int(sdb, "sim_elapsed_time",
-//	       "total simulation time in seconds",
-//	       &sim_elapsed_time, 0, NULL);
-//  stat_reg_formula(sdb, "sim_inst_rate",
-//		   "simulation speed (in insts/sec)",
-//		   "sim_num_insn / sim_elapsed_time", NULL);
-//
-//  stat_reg_counter(sdb, "sim_total_insn",
-//		   "total number of instructions executed",
-//		   &sim_total_insn, 0, NULL);
-//  stat_reg_counter(sdb, "sim_total_refs",
-//		   "total number of loads and stores executed",
-//		   &sim_total_refs, 0, NULL);
-//  stat_reg_counter(sdb, "sim_total_loads",
-//		   "total number of loads executed",
-//		   &sim_total_loads, 0, NULL);
-//  stat_reg_formula(sdb, "sim_total_stores",
-//		   "total number of stores executed",
-//		   "sim_total_refs - sim_total_loads", NULL);
-//  stat_reg_counter(sdb, "sim_total_branches",
-//		   "total number of branches executed",
-//		   &sim_total_branches, /* initial value */0, /* format */NULL);
-//
-//  /* register performance stats */
-//  stat_reg_counter(sdb, "sim_cycle",
-//		   "total simulation time in cycles",
-//		   &sim_cycle, /* initial value */0, /* format */NULL);
-//  stat_reg_formula(sdb, "sim_IPC",
-//		   "instructions per cycle",
-//		   "sim_num_insn / sim_cycle", /* format */NULL);
-//  stat_reg_formula(sdb, "sim_CPI",
-//		   "cycles per instruction",
-//		   "sim_cycle / sim_num_insn", /* format */NULL);
-//  stat_reg_formula(sdb, "sim_exec_BW",
-//		   "total instructions (mis-spec + committed) per cycle",
-//		   "sim_total_insn / sim_cycle", /* format */NULL);
-//  stat_reg_formula(sdb, "sim_IPB",
-//		   "instruction per branch",
-//		   "sim_num_insn / sim_num_branches", /* format */NULL);
-//
-//  /* occupancy stats */
-//  stat_reg_counter(sdb, "IFQ_count", "cumulative IFQ occupancy",
-//                   &IFQ_count, /* initial value */0, /* format */NULL);
-//  stat_reg_counter(sdb, "IFQ_fcount", "cumulative IFQ full count",
-//                   &IFQ_fcount, /* initial value */0, /* format */NULL);
-//  stat_reg_formula(sdb, "ifq_occupancy", "avg IFQ occupancy (insn's)",
-//                   "IFQ_count / sim_cycle", /* format */NULL);
-//  stat_reg_formula(sdb, "ifq_rate", "avg IFQ dispatch rate (insn/cycle)",
-//                   "sim_total_insn / sim_cycle", /* format */NULL);
-//  stat_reg_formula(sdb, "ifq_latency", "avg IFQ occupant latency (cycle's)",
-//                   "ifq_occupancy / ifq_rate", /* format */NULL);
-//  stat_reg_formula(sdb, "ifq_full", "fraction of time (cycle's) IFQ was full",
-//                   "IFQ_fcount / sim_cycle", /* format */NULL);
-//
-//  stat_reg_counter(sdb, "RUU_count", "cumulative RUU occupancy",
-//                   &RUU_count, /* initial value */0, /* format */NULL);
-//  stat_reg_counter(sdb, "RUU_fcount", "cumulative RUU full count",
-//                   &RUU_fcount, /* initial value */0, /* format */NULL);
-//  stat_reg_formula(sdb, "ruu_occupancy", "avg RUU occupancy (insn's)",
-//                   "RUU_count / sim_cycle", /* format */NULL);
-//  stat_reg_formula(sdb, "ruu_rate", "avg RUU dispatch rate (insn/cycle)",
-//                   "sim_total_insn / sim_cycle", /* format */NULL);
-//  stat_reg_formula(sdb, "ruu_latency", "avg RUU occupant latency (cycle's)",
-//                   "ruu_occupancy / ruu_rate", /* format */NULL);
-//  stat_reg_formula(sdb, "ruu_full", "fraction of time (cycle's) RUU was full",
-//                   "RUU_fcount / sim_cycle", /* format */NULL);
-//
-//  stat_reg_counter(sdb, "LSQ_count", "cumulative LSQ occupancy",
-//                   &LSQ_count, /* initial value */0, /* format */NULL);
-//  stat_reg_counter(sdb, "LSQ_fcount", "cumulative LSQ full count",
-//                   &LSQ_fcount, /* initial value */0, /* format */NULL);
-//  stat_reg_formula(sdb, "lsq_occupancy", "avg LSQ occupancy (insn's)",
-//                   "LSQ_count / sim_cycle", /* format */NULL);
-//  stat_reg_formula(sdb, "lsq_rate", "avg LSQ dispatch rate (insn/cycle)",
-//                   "sim_total_insn / sim_cycle", /* format */NULL);
-//  stat_reg_formula(sdb, "lsq_latency", "avg LSQ occupant latency (cycle's)",
-//                   "lsq_occupancy / lsq_rate", /* format */NULL);
-//  stat_reg_formula(sdb, "lsq_full", "fraction of time (cycle's) LSQ was full",
-//                   "LSQ_fcount / sim_cycle", /* format */NULL);
-//
-//  stat_reg_counter(sdb, "sim_slip",
-//                   "total number of slip cycles",
-//                   &sim_slip, 0, NULL);
-//  /* register baseline stats */
-//  stat_reg_formula(sdb, "avg_sim_slip",
-//                   "the average slip between issue and retirement",
-//                   "sim_slip / sim_num_insn", NULL);
-//
-//  /* register predictor stats */
-//  if (pred)
-//    bpred_reg_stats(pred, sdb);
-//
-//  /* register cache stats */
-//  if (cache_il1
-//      && (cache_il1 != cache_dl1 && cache_il1 != cache_dl2))
-//    cache_reg_stats(cache_il1, sdb);
-//  if (cache_il2
-//      && (cache_il2 != cache_dl1 && cache_il2 != cache_dl2))
-//    cache_reg_stats(cache_il2, sdb);
-//  if (cache_dl1)
-//    cache_reg_stats(cache_dl1, sdb);
-//  if (cache_dl2)
-//    cache_reg_stats(cache_dl2, sdb);
-//  if (itlb)
-//    cache_reg_stats(itlb, sdb);
-//  if (dtlb)
-//    cache_reg_stats(dtlb, sdb);
-//
-//  /* register power stats */
-//  power_reg_stats(sdb);
-//
-//  /* debug variable(s) */
-//  stat_reg_counter(sdb, "sim_invalid_addrs",
-//		   "total non-speculative bogus addresses seen (debug var)",
-//                   &sim_invalid_addrs, /* initial value */0, /* format */NULL);
-//
-//  for (i=0; i<pcstat_nelt; i++)
-//    {
-//      char buf[512], buf1[512];
-//      struct stat_stat_t *stat;
-//
-//      /* track the named statistical variable by text address */
-//
-//      /* find it... */
-//      stat = stat_find_stat(sdb, pcstat_vars[i]);
-//      if (!stat)
-//	fatal("cannot locate any statistic named `%s'", pcstat_vars[i]);
-//
-//      /* stat must be an integral type */
-//      if (stat->sc != sc_int && stat->sc != sc_uint && stat->sc != sc_counter)
-//	fatal("`-pcstat' statistical variable `%s' is not an integral type",
-//	      stat->name);
-//
-//      /* register this stat */
-//      pcstat_stats[i] = stat;
-//      pcstat_lastvals[i] = STATVAL(stat);
-//
-//      /* declare the sparce text distribution */
-//      sprintf(buf, "%s_by_pc", stat->name);
-//      sprintf(buf1, "%s (by text address)", stat->desc);
-//      pcstat_sdists[i] = stat_reg_sdist(sdb, buf, buf1,
-//					/* initial value */0,
-//					/* print format */(PF_COUNT|PF_PDF),
-//					/* format */"0x%lx %lu %.2f",
-//					/* print fn */NULL);
-//    }
-//  ld_reg_stats(sdb);
-//  mem_reg_stats(mem, sdb);
+  stat_reg_counter(sdb, "sim_total_insn",
+		   "total number of instructions executed",
+		   &sim_total_insn, 0, NULL);
+  stat_reg_counter(sdb, "sim_total_refs",
+		   "total number of loads and stores executed",
+		   &sim_total_refs, 0, NULL);
+  stat_reg_counter(sdb, "sim_total_loads",
+		   "total number of loads executed",
+		   &sim_total_loads, 0, NULL);
+  stat_reg_formula(sdb, "sim_total_stores",
+		   "total number of stores executed",
+		   "sim_total_refs - sim_total_loads", NULL);
+  stat_reg_counter(sdb, "sim_total_branches",
+		   "total number of branches executed",
+		   &sim_total_branches, /* initial value */0, /* format */NULL);
+
+  /* register performance stats */
+  stat_reg_counter(sdb, "sim_cycle",
+		   "total simulation time in cycles",
+		   &sim_cycle, /* initial value */0, /* format */NULL);
+  stat_reg_formula(sdb, "sim_IPC",
+		   "instructions per cycle",
+		   "sim_num_insn / sim_cycle", /* format */NULL);
+  stat_reg_formula(sdb, "sim_CPI",
+		   "cycles per instruction",
+		   "sim_cycle / sim_num_insn", /* format */NULL);
+  stat_reg_formula(sdb, "sim_exec_BW",
+		   "total instructions (mis-spec + committed) per cycle",
+		   "sim_total_insn / sim_cycle", /* format */NULL);
+  stat_reg_formula(sdb, "sim_IPB",
+		   "instruction per branch",
+		   "sim_num_insn / sim_num_branches", /* format */NULL);
+
+  /* occupancy stats */
+  stat_reg_counter(sdb, "IFQ_count", "cumulative IFQ occupancy",
+                   &IFQ_count, /* initial value */0, /* format */NULL);
+  stat_reg_counter(sdb, "IFQ_fcount", "cumulative IFQ full count",
+                   &IFQ_fcount, /* initial value */0, /* format */NULL);
+  stat_reg_formula(sdb, "ifq_occupancy", "avg IFQ occupancy (insn's)",
+                   "IFQ_count / sim_cycle", /* format */NULL);
+  stat_reg_formula(sdb, "ifq_rate", "avg IFQ dispatch rate (insn/cycle)",
+                   "sim_total_insn / sim_cycle", /* format */NULL);
+  stat_reg_formula(sdb, "ifq_latency", "avg IFQ occupant latency (cycle's)",
+                   "ifq_occupancy / ifq_rate", /* format */NULL);
+  stat_reg_formula(sdb, "ifq_full", "fraction of time (cycle's) IFQ was full",
+                   "IFQ_fcount / sim_cycle", /* format */NULL);
+
+  stat_reg_counter(sdb, "RUU_count", "cumulative RUU occupancy",
+                   &RUU_count, /* initial value */0, /* format */NULL);
+  stat_reg_counter(sdb, "RUU_fcount", "cumulative RUU full count",
+                   &RUU_fcount, /* initial value */0, /* format */NULL);
+  stat_reg_formula(sdb, "ruu_occupancy", "avg RUU occupancy (insn's)",
+                   "RUU_count / sim_cycle", /* format */NULL);
+  stat_reg_formula(sdb, "ruu_rate", "avg RUU dispatch rate (insn/cycle)",
+                   "sim_total_insn / sim_cycle", /* format */NULL);
+  stat_reg_formula(sdb, "ruu_latency", "avg RUU occupant latency (cycle's)",
+                   "ruu_occupancy / ruu_rate", /* format */NULL);
+  stat_reg_formula(sdb, "ruu_full", "fraction of time (cycle's) RUU was full",
+                   "RUU_fcount / sim_cycle", /* format */NULL);
+
+  stat_reg_counter(sdb, "LSQ_count", "cumulative LSQ occupancy",
+                   &LSQ_count, /* initial value */0, /* format */NULL);
+  stat_reg_counter(sdb, "LSQ_fcount", "cumulative LSQ full count",
+                   &LSQ_fcount, /* initial value */0, /* format */NULL);
+  stat_reg_formula(sdb, "lsq_occupancy", "avg LSQ occupancy (insn's)",
+                   "LSQ_count / sim_cycle", /* format */NULL);
+  stat_reg_formula(sdb, "lsq_rate", "avg LSQ dispatch rate (insn/cycle)",
+                   "sim_total_insn / sim_cycle", /* format */NULL);
+  stat_reg_formula(sdb, "lsq_latency", "avg LSQ occupant latency (cycle's)",
+                   "lsq_occupancy / lsq_rate", /* format */NULL);
+  stat_reg_formula(sdb, "lsq_full", "fraction of time (cycle's) LSQ was full",
+                   "LSQ_fcount / sim_cycle", /* format */NULL);
+
+  stat_reg_counter(sdb, "sim_slip",
+                   "total number of slip cycles",
+                   &sim_slip, 0, NULL);
+  /* register baseline stats */
+  stat_reg_formula(sdb, "avg_sim_slip",
+                   "the average slip between issue and retirement",
+                   "sim_slip / sim_num_insn", NULL);
+
+  /* register predictor stats */
+  if (pred)
+    bpred_reg_stats(pred, sdb);
+
+  /* register cache stats */
+  if (cache_il1
+     && (cache_il1 != cache_dl1 && cache_il1 != cache_dl2))
+    cache_reg_stats(cache_il1, sdb);
+  if (cache_il2
+      && (cache_il2 != cache_dl1 && cache_il2 != cache_dl2))
+    cache_reg_stats(cache_il2, sdb);
+  if (cache_dl1)
+    cache_reg_stats(cache_dl1, sdb);
+  if (cache_dl2)
+    cache_reg_stats(cache_dl2, sdb);
+  if (itlb)
+    cache_reg_stats(itlb, sdb);
+  if (dtlb)
+    cache_reg_stats(dtlb, sdb);
+
+  /* register power stats */
+  power_reg_stats(sdb);
+
+  /* debug variable(s) */
+  stat_reg_counter(sdb, "sim_invalid_addrs",
+		   "total non-speculative bogus addresses seen (debug var)",
+                   &sim_invalid_addrs, /* initial value */0, /* format */NULL);
+
+  for (i=0; i<pcstat_nelt; i++)
+    {
+      char buf[512], buf1[512];
+      struct stat_stat_t *stat;
+
+      /* track the named statistical variable by text address */
+
+      /* find it... */
+      stat = stat_find_stat(sdb, pcstat_vars[i]);
+      if (!stat)
+	fatal("cannot locate any statistic named `%s'", pcstat_vars[i]);
+
+      /* stat must be an integral type */
+      if (stat->sc != sc_int && stat->sc != sc_uint && stat->sc != sc_counter)
+	fatal("`-pcstat' statistical variable `%s' is not an integral type",
+	      stat->name);
+
+      /* register this stat */
+      pcstat_stats[i] = stat;
+      pcstat_lastvals[i] = STATVAL(stat);
+
+      /* declare the sparce text distribution */
+      sprintf(buf, "%s_by_pc", stat->name);
+      sprintf(buf1, "%s (by text address)", stat->desc);
+      pcstat_sdists[i] = stat_reg_sdist(sdb, buf, buf1,
+					/* initial value */0,
+					/* print format */(PF_COUNT|PF_PDF),
+					/* format */"0x%lx %lu %.2f",
+					/* print fn */NULL);
+    }
+  ld_reg_stats(sdb);
+  mem_reg_stats(mem, sdb);
+
+////////////////////////////////////////////////////////////////
+//sdrea-begin
 
   stat_reg_int(sdb, "simpoint",
 	       "simpoint",
@@ -1799,30 +1799,10 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 	       "simpoint interval",
 	       &simpoint_interval, simpoint_interval, "%32d");
 
-  stat_reg_counter(sdb, "sim_num_insn",
-		   "total number of instructions committed",
-		   &sim_num_insn, sim_num_insn, "%32d");
-
-  stat_reg_counter(sdb, "sim_cycle",
-		   "total simulation time in cycles",
-		   &sim_cycle, /* initial value */0, /* format */"%32d");
-
-  stat_reg_formula(sdb, "sim_CPI",
-		   "cycles per instruction",
-		   "sim_cycle / sim_num_insn", /* format */"%32.4f");
-
-stat_reg_formula(sdb, "sim_IPC",
-		   "instructions per cycle",
-		   "sim_num_insn / sim_cycle", /* format */"%32.4f");
-
-  stat_reg_counter(sdb, "dl1_misses",
-		   "total number of dl1 misses",
-		   &cache_dl1->misses, cache_dl1->misses, "%32d");
-
-  cache_reg_stats(cache_dl1, sdb);
-
 ////////////////////////////////////////////////////////////////
 //sdrea-end
+
+
 
 }
 
@@ -5276,13 +5256,10 @@ sim_main(void)
 #endif /* HOST_HAS_QWORD */
       enum md_fault_type fault;
 
-//sdrea-begin
-////////////////////////////////////////////////////////////////
 
-//      fprintf(stderr, "sim: ** fast forwarding %d insts **\n", fastfwd_count);
+      fprintf(stderr, "sim: ** fast forwarding %d insts **\n", fastfwd_count);
 
-////////////////////////////////////////////////////////////////
-//sdrea-end
+
 
       for (icount=0; icount < fastfwd_count; icount++)
 	{
@@ -5345,10 +5322,10 @@ sim_main(void)
 	}
     }
 
+fprintf(stderr, "sim: ** starting performance simulation **\n");
+
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
-
-//  fprintf(stderr, "sim: ** starting performance simulation **\n");
 
 time_t now;
 now = time(NULL);

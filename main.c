@@ -1,12 +1,3 @@
-// Variant of SimpleScalar developed for modelling cache compression and prefetching
-// Based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
-//
-// changes wrapped in //sdrea-begin ... //sdrea-end
-//
-// Sean Rea
-// sdrea@lakeheadu.ca
-// 2016-2017
-////////////////////////////////////////////////////////////////
 
 /* main.c - main line routines */
 
@@ -216,13 +207,9 @@ sim_print_stats(FILE *fd)		/* output stream */
 
   /* print simulation stats */
 
-//sdrea-begin
-////////////////////////////////////////////////////////////////
 
-//  fprintf(fd, "\nsim: ** simulation statistics **\n");
+  fprintf(fd, "\nsim: ** simulation statistics **\n");
 
-////////////////////////////////////////////////////////////////
-//sdrea-end
 
   stat_print_stats(sim_sdb, fd);
   sim_aux_stats(fd);
@@ -339,13 +326,10 @@ main(int argc, char **argv, char **envp)
 
   /* opening banner */
 
-//sdrea-begin
-////////////////////////////////////////////////////////////////
 
-//  banner(stderr, argc, argv);
 
-////////////////////////////////////////////////////////////////
-//sdrea-end
+  banner(stderr, argc, argv);
+
 
   if (help_me)
     {
@@ -419,32 +403,27 @@ main(int argc, char **argv, char **envp)
 
   /* emit the command line for later reuse */
 
-//sdrea-begin
-////////////////////////////////////////////////////////////////
 
-//  fprintf(stderr, "sim: command line: ");
-//  for (i=0; i < argc; i++)
-//    fprintf(stderr, "%s ", argv[i]);
-//  fprintf(stderr, "\n");
 
-////////////////////////////////////////////////////////////////
-//sdrea-end
+  fprintf(stderr, "sim: command line: ");
+  for (i=0; i < argc; i++)
+  fprintf(stderr, "%s ", argv[i]);
+  fprintf(stderr, "\n");
+
+
 
   /* output simulation conditions */
   s = ctime(&sim_start_time);
   if (s[strlen(s)-1] == '\n')
     s[strlen(s)-1] = '\0';
 
-//sdrea-begin
-////////////////////////////////////////////////////////////////
 
-//  fprintf(stderr, "\nsim: simulation started @ %s, options follow:\n", s);
-//  opt_print_options(sim_odb, stderr, /* short */TRUE, /* notes */TRUE);
-//  sim_aux_config(stderr);
-//  fprintf(stderr, "\n");
+  fprintf(stderr, "\nsim: simulation started @ %s, options follow:\n", s);
+  opt_print_options(sim_odb, stderr, /* short */TRUE, /* notes */TRUE);
+  sim_aux_config(stderr);
+  fprintf(stderr, "\n");
 
-////////////////////////////////////////////////////////////////
-//sdrea-end
+
 
 
   /* omit option dump time from rate stats */

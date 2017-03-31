@@ -519,37 +519,73 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
   else
     name = cp->name;
 
+  sprintf(buf, "%s.accesses", name);
+  sprintf(buf1, "%s.hits + %s.misses", name, name);
+  stat_reg_formula(sdb, buf, "total number of accesses", buf1, "%12.0f");
+  sprintf(buf, "%s.hits", name);
+  stat_reg_counter(sdb, buf, "total number of hits", &cp->hits, 0, NULL);
+  sprintf(buf, "%s.misses", name);
+  stat_reg_counter(sdb, buf, "total number of misses", &cp->misses, 0, NULL);
+  sprintf(buf, "%s.replacements", name);
+  stat_reg_counter(sdb, buf, "total number of replacements",
+		 &cp->replacements, 0, NULL);
+  sprintf(buf, "%s.writebacks", name);
+  stat_reg_counter(sdb, buf, "total number of writebacks",
+		 &cp->writebacks, 0, NULL);
+  sprintf(buf, "%s.invalidations", name);
+  stat_reg_counter(sdb, buf, "total number of invalidations",
+		 &cp->invalidations, 0, NULL);
+  sprintf(buf, "%s.miss_rate", name);
+  sprintf(buf1, "%s.misses / %s.accesses", name, name);
+  stat_reg_formula(sdb, buf, "miss rate (i.e., misses/ref)", buf1, NULL);
+  sprintf(buf, "%s.repl_rate", name);
+  sprintf(buf1, "%s.replacements / %s.accesses", name, name);
+  stat_reg_formula(sdb, buf, "replacement rate (i.e., repls/ref)", buf1, NULL);
+  sprintf(buf, "%s.wb_rate", name);
+  sprintf(buf1, "%s.writebacks / %s.accesses", name, name);
+  stat_reg_formula(sdb, buf, "writeback rate (i.e., wrbks/ref)", buf1, NULL);
+  sprintf(buf, "%s.inv_rate", name);
+  sprintf(buf1, "%s.invalidations / %s.accesses", name, name);
+  stat_reg_formula(sdb, buf, "invalidation rate (i.e., invs/ref)", buf1, NULL);
+
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
-//  sprintf(buf, "%s.accesses", name);
-//  sprintf(buf1, "%s.hits + %s.misses", name, name);
-//  stat_reg_formula(sdb, buf, "total number of accesses", buf1, "%12.0f");
-//  sprintf(buf, "%s.hits", name);
-//  stat_reg_counter(sdb, buf, "total number of hits", &cp->hits, 0, NULL);
-//  sprintf(buf, "%s.misses", name);
-//  stat_reg_counter(sdb, buf, "total number of misses", &cp->misses, 0, NULL);
-//  sprintf(buf, "%s.replacements", name);
-//  stat_reg_counter(sdb, buf, "total number of replacements",
-//		 &cp->replacements, 0, NULL);
-//  sprintf(buf, "%s.writebacks", name);
-//  stat_reg_counter(sdb, buf, "total number of writebacks",
-//		 &cp->writebacks, 0, NULL);
-//  sprintf(buf, "%s.invalidations", name);
-//  stat_reg_counter(sdb, buf, "total number of invalidations",
-//		 &cp->invalidations, 0, NULL);
-//  sprintf(buf, "%s.miss_rate", name);
-//  sprintf(buf1, "%s.misses / %s.accesses", name, name);
-//  stat_reg_formula(sdb, buf, "miss rate (i.e., misses/ref)", buf1, NULL);
-//  sprintf(buf, "%s.repl_rate", name);
-//  sprintf(buf1, "%s.replacements / %s.accesses", name, name);
-//  stat_reg_formula(sdb, buf, "replacement rate (i.e., repls/ref)", buf1, NULL);
-//  sprintf(buf, "%s.wb_rate", name);
-//  sprintf(buf1, "%s.writebacks / %s.accesses", name, name);
-//  stat_reg_formula(sdb, buf, "writeback rate (i.e., wrbks/ref)", buf1, NULL);
-//  sprintf(buf, "%s.inv_rate", name);
-//  sprintf(buf1, "%s.invalidations / %s.accesses", name, name);
-//  stat_reg_formula(sdb, buf, "invalidation rate (i.e., invs/ref)", buf1, NULL);
+  sprintf(buf, "%s_sim_tag_static_power", name);
+  sprintf(buf1, "%s Cache Tag Leakage Power (mW-cycles)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_tag_static_power, 0, "%30.6f");
+
+  sprintf(buf, "%s_sim_tag_read_dynamic_energy", name);
+  sprintf(buf1, "%s Cache Tag Dynamic Read Energy (nJ)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_tag_read_dynamic_energy, 0, "%23.6f");
+
+  sprintf(buf, "%s_sim_tag_write_dynamic_energy", name);
+  sprintf(buf1, "%s Cache Tag Dynamic Write Energy (nJ)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_tag_write_dynamic_energy, 0, "%22.6f");
+
+  sprintf(buf, "%s_sim_data_static_power", name);
+  sprintf(buf1, "%s Cache Data Leakage Power (mW-cycles)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_data_static_power, 0, "%29.6f");
+
+  sprintf(buf, "%s_sim_data_read_dynamic_energy", name);
+  sprintf(buf1, "%s Cache Data Dynamic Read Energy (nJ)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_data_read_dynamic_energy, 0, "%22.6f");
+
+  sprintf(buf, "%s_sim_data_write_dynamic_energy", name);
+  sprintf(buf1, "%s Cache Data Dynamic Write Energy (nJ)", name);
+  stat_reg_double(sdb, buf,
+               buf1,
+               &cp->sim_data_write_dynamic_energy, 0, "%21.6f");
 
 if(cp->bdi_check)
 
@@ -600,49 +636,13 @@ stat_reg_formula(sdb, "rate_encode_0111_b2d1", "Percentage of cache lines compre
 stat_reg_counter(sdb, "size_compressed", "Size of compressed cache lines", &size_compressed, 0, "%32d");
 stat_reg_counter(sdb, "size_uncompressed", "Size of uncompressed cache lines", &size_uncompressed, 0, "%32d");
 stat_reg_formula(sdb, "compression_ratio", "Compression Ratio",       "size_uncompressed / size_compressed", "%32.5f");
-}
-
-  sprintf(buf, "%s_sim_tag_static_power", name);
-  sprintf(buf1, "%s Cache Tag Leakage Power (mW-cycles)", name);
-  stat_reg_double(sdb, buf,
-               buf1,
-               &cp->sim_tag_static_power, 0, "%30.6f");
-
-  sprintf(buf, "%s_sim_tag_read_dynamic_energy", name);
-  sprintf(buf1, "%s Cache Tag Dynamic Read Energy (nJ)", name);
-  stat_reg_double(sdb, buf,
-               buf1,
-               &cp->sim_tag_read_dynamic_energy, 0, "%23.6f");
-
-  sprintf(buf, "%s_sim_tag_write_dynamic_energy", name);
-  sprintf(buf1, "%s Cache Tag Dynamic Write Energy (nJ)", name);
-  stat_reg_double(sdb, buf,
-               buf1,
-               &cp->sim_tag_write_dynamic_energy, 0, "%22.6f");
-
-  sprintf(buf, "%s_sim_data_static_power", name);
-  sprintf(buf1, "%s Cache Data Leakage Power (mW-cycles)", name);
-  stat_reg_double(sdb, buf,
-               buf1,
-               &cp->sim_data_static_power, 0, "%29.6f");
-
-  sprintf(buf, "%s_sim_data_read_dynamic_energy", name);
-  sprintf(buf1, "%s Cache Data Dynamic Read Energy (nJ)", name);
-  stat_reg_double(sdb, buf,
-               buf1,
-               &cp->sim_data_read_dynamic_energy, 0, "%22.6f");
-
-  sprintf(buf, "%s_sim_data_write_dynamic_energy", name);
-  sprintf(buf1, "%s Cache Data Dynamic Write Energy (nJ)", name);
-  stat_reg_double(sdb, buf,
-               buf1,
-               &cp->sim_data_write_dynamic_energy, 0, "%21.6f");
 
 stat_reg_counter(sdb, "vcd_lines_compressor", "Number of changes written to compressor VCD", &vcd_lines_compressor, 0, "%32d");
 stat_reg_counter(sdb, "vcd_lines_decompressor", "Number of changes written to decompressor VCD", &vcd_lines_decompressor, 0, "%32d");
 
 stat_reg_formula(sdb, "vcd_filesize_compressor", "Approximate VCD filesize for compressor in MB", "(vcd_lines_compressor+204) / 1925", "%31.3f");
 stat_reg_formula(sdb, "vcd_filesize_decompressor", "Approximate VCD filesize for decompressor in MB", "(vcd_lines_decompressor+235) / 1900", "%29.3f");
+}
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
