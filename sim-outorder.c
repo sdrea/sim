@@ -5257,7 +5257,7 @@ sim_main(void)
       enum md_fault_type fault;
 
 
-      fprintf(stderr, "sim: ** fast forwarding %d insts **\n", fastfwd_count);
+      fprintf(stderr, "sim: ** fast forwarding %lu insts **\n", fastfwd_count);
 
 
 
