@@ -544,6 +544,12 @@ static int dl2_decompression_latency;
 
 static int compressor_frequency;
 
+static int FETCH_LATENCY_OPTION;
+static int FETCH_BRANCH_EXTRA_LATENCY_OPTION;
+static int DECODE_LATENCY_OPTION;
+static int WRITEBACK_TO_DECODE_LATENCY_OPTION;
+static int WRITEBACK_TO_COMMIT_LATENCY_OPTION;
+
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -1221,6 +1227,26 @@ sim_reg_options(struct opt_odb_t *odb)
   opt_reg_int(odb, "-cache:compressor:frequency",
                 "compressor frequency (GHz)",
                 &compressor_frequency, 0, TRUE, NULL);
+
+  opt_reg_int(odb, "-fetch_lat", "Latency of fetch unit",
+	      &FETCH_LATENCY_OPTION, /* default */1,
+	      /* print */TRUE, /* format */NULL);
+
+  opt_reg_int(odb, "-fetch_br_extra_lat", "Extra latency in fetch unit for branch instruction",
+	      &FETCH_BRANCH_EXTRA_LATENCY_OPTION, /* default */0,
+	      /* print */TRUE, /* format */NULL);
+
+  opt_reg_int(odb, "-decode_lat", "Latency of dispatch unit",
+	      &DECODE_LATENCY_OPTION, /* default */1,
+	      /* print */TRUE, /* format */NULL);
+ 
+ opt_reg_int(odb, "-writeback_to_decode_lat", "Latency of write back to decode unit",
+	      &WRITEBACK_TO_DECODE_LATENCY_OPTION, /* default */1,
+	      /* print */TRUE, /* format */NULL);
+
+ opt_reg_int(odb, "-writeback_to_commit_lat", "Latency of writeback_to_commit unit",
+	      &WRITEBACK_TO_COMMIT_LATENCY_OPTION, /* default */0,
+	      /* print */TRUE, /* format */NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -2449,6 +2475,7 @@ readyq_dump(FILE *stream)			/* output stream */
   which works to reduce branch misprediction latencies, and very long latency
   instructions (such loads and multiplies) get priority since they are very
   likely on the program's critical path */
+
 static void
 readyq_enqueue(struct RUU_station *rs)		/* RS to enqueue */
 {
@@ -2492,6 +2519,123 @@ readyq_enqueue(struct RUU_station *rs)		/* RS to enqueue */
     }
 }
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+struct delay_ready_queue_node
+{
+  struct RUU_station *rs;
+  tick_t sim_cycle;
+  struct delay_ready_queue_node *nextPtr;
+};
+
+struct delay_ready_queue_head
+{
+struct delay_ready_queue_node *headPtr;
+};
+
+void delay_ready_queue_initial(struct delay_ready_queue_head* in)
+{
+  in->headPtr=NULL;
+}
+
+void delay_ready_queue_addNode(struct delay_ready_queue_head *in, struct RUU_station *rs_in, tick_t sim_cycle_in)
+{
+	struct delay_ready_queue_node *tmp;
+	struct delay_ready_queue_node *tmp1;
+	tmp=(struct delay_ready_queue_node *) malloc(sizeof(struct delay_ready_queue_node)) ;
+	if(!tmp)
+	  panic("not node for delay_ready_queue_node");
+
+	tmp->nextPtr=NULL;
+	tmp->rs= rs_in;
+	tmp->sim_cycle = sim_cycle_in;
+
+	if(in->headPtr==NULL)
+	{
+		in->headPtr=tmp;
+	}
+	else
+	{
+		tmp1=in->headPtr;
+		while(tmp1->nextPtr!=NULL)
+			tmp1=tmp1->nextPtr;
+		tmp1->nextPtr=tmp;
+	}
+	return; 
+} 
+
+struct RUU_station *delay_ready_queue_deleteNode(struct delay_ready_queue_head* in, tick_t sim_cycle_in)
+{
+	struct delay_ready_queue_node *tmp;
+        struct delay_ready_queue_node *before;
+	struct RUU_station *tmp_rs;
+
+	tmp=in->headPtr;
+        before = NULL;
+	if(tmp == NULL)
+	  return 0;
+
+	while(tmp != NULL)
+	{
+	  if(tmp->sim_cycle < sim_cycle_in)
+	    panic("one node always remains in delay_ready_queue");
+	  if(tmp->sim_cycle != sim_cycle_in)
+	    {
+	      before = tmp;
+	      tmp=tmp->nextPtr;
+	    }
+	  else
+	    {
+	      if(before == NULL)
+		in->headPtr = tmp->nextPtr;
+	      else
+		before->nextPtr = tmp->nextPtr;
+	      tmp_rs= tmp->rs;
+	      tmp->rs = 0;tmp->nextPtr=0;
+	      free(tmp);
+	      return tmp_rs;
+	    }   
+	}
+	return 0;
+}
+
+int delay_ready_queue_deleteNode_by_rs(struct delay_ready_queue_head* in, struct RUU_station *rs_in)
+{
+	struct delay_ready_queue_node *tmp;
+        struct delay_ready_queue_node *before;
+
+	tmp=in->headPtr;
+        before = NULL;
+	if(tmp == NULL)
+	  return 0;
+
+	while(tmp != NULL)
+	{
+	  if(tmp->rs != rs_in)
+	    {
+	      before = tmp;
+	      tmp=tmp->nextPtr;
+	    }
+	  else
+	    {
+	      if(before == NULL)
+		in->headPtr = tmp->nextPtr;
+	      else
+		before->nextPtr = tmp->nextPtr;
+
+	      tmp->rs = 0;tmp->nextPtr=0;
+	      free(tmp);
+	      return 1;
+	    }   
+	}
+	return 0;
+}
+
+struct delay_ready_queue_head delay_ready_queue; 
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
 /*
  * the create vector maps a logical register to a creator in the RUU (and
@@ -2829,6 +2973,15 @@ ruu_recover(int branch_index)			/* index of mis-pred branch */
 	  /* squash this LSQ entry */
 	  LSQ[LSQ_index].tag++;
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+delay_ready_queue_deleteNode_by_rs(&delay_ready_queue, &LSQ[LSQ_index]);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
 	  /* indicate in pipetrace that this instruction was squashed */
 	  ptrace_endinst(LSQ[LSQ_index].ptrace_seq);
 
@@ -2848,6 +3001,14 @@ ruu_recover(int branch_index)			/* index of mis-pred branch */
       
       /* squash this RUU entry */
       RUU[RUU_index].tag++;
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+delay_ready_queue_deleteNode_by_rs(&delay_ready_queue, &RUU[RUU_index]);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
       /* indicate in pipetrace that this instruction was squashed */
       ptrace_endinst(RUU[RUU_index].ptrace_seq);
@@ -3019,7 +3180,26 @@ ruu_writeback(void)
 			  if (!olink->rs->in_LSQ
 			      || ((MD_OP_FLAGS(olink->rs->op)&(F_MEM|F_STORE))
 				  == (F_MEM|F_STORE)))
-			    readyq_enqueue(olink->rs);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+// sim_cycle + WRITEBACK_TO_DECODE_LATENCY_OPTION - 1
+
+//			    readyq_enqueue(olink->rs);
+
+if (WRITEBACK_TO_DECODE_LATENCY_OPTION < 2)
+  {
+    readyq_enqueue(olink->rs);
+  }
+else
+  {
+    delay_ready_queue_addNode(&delay_ready_queue, olink->rs, sim_cycle + WRITEBACK_TO_DECODE_LATENCY_OPTION - 1);
+  }
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 			  /* else, ld op, issued when no mem conflict */
 			}
 		    }
@@ -3114,7 +3294,19 @@ lsq_refresh(void)
 	  if (j == n_std_unknowns)
 	    {
 	      /* no STA or STD unknown conflicts, put load on ready queue */
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+// no change here
+
+//	      readyq_enqueue(&LSQ[index]);
+
 	      readyq_enqueue(&LSQ[index]);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 	    }
 	}
     }
@@ -3336,7 +3528,18 @@ ruu_issue(void)
 			    }
 
 			  /* use computed cache access latency */
-			  eventq_queue_event(rs, sim_cycle + load_lat);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//sim_cycle + load_lat + WRITEBACK_TO_COMMIT_LATENCY_OPTION
+
+//			  eventq_queue_event(rs, sim_cycle + load_lat);
+
+			  eventq_queue_event(rs, sim_cycle + load_lat + WRITEBACK_TO_COMMIT_LATENCY_OPTION);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
 			  /* entered execute stage, indicate in pipe trace */
 			  ptrace_newstage(rs->ptrace_seq, PST_EXECUTE,
@@ -3357,7 +3560,18 @@ ruu_issue(void)
 			    ialu_access++;
 
 			  /* use deterministic functional unit latency */
-			  eventq_queue_event(rs, sim_cycle + fu->oplat);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//sim_cycle + fu->oplat + WRITEBACK_TO_COMMIT_LATENCY_OPTION
+
+//			  eventq_queue_event(rs, sim_cycle + fu->oplat);
+
+			  eventq_queue_event(rs, sim_cycle + fu->oplat + WRITEBACK_TO_COMMIT_LATENCY_OPTION);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
 			  /* entered execute stage, indicate in pipe trace */
 			  ptrace_newstage(rs->ptrace_seq, PST_EXECUTE, 
@@ -3382,7 +3596,19 @@ ruu_issue(void)
 		      /* insufficient functional unit resources, put operation
 			 back onto the ready list, we'll try to issue it
 			 again next cycle */
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//no change here
+
+//		      readyq_enqueue(rs);
+
 		      readyq_enqueue(rs);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 		    }
 		}
 	      else /* does not require a functional unit! */
@@ -3439,7 +3665,19 @@ ruu_issue(void)
 
 	  /* not issued, put operation back onto the ready list, we'll try to
 	     issue it again next cycle */
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+// no change here
+
+//          readyq_enqueue(rs);
+
           readyq_enqueue(rs);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
         }
       /* else, RUU entry was squashed */
 
@@ -3551,6 +3789,13 @@ struct fetch_rec {
   struct bpred_update_t dir_update;	/* bpred direction update info */
   int stack_recover_idx;		/* branch predictor RSB index */
   unsigned int ptrace_seq;		/* print trace sequence id */
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+  tick_t fetch_delay;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 };
 static struct fetch_rec *fetch_data;	/* IFETCH -> DISPATCH inst queue */
 static int fetch_num;			/* num entries in IF -> DIS queue */
@@ -4342,6 +4587,15 @@ ruu_dispatch(void)
 #endif /* HOST_HAS_QWORD */
   enum md_fault_type fault;
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+struct RUU_station *tmp_rs;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
+
   /* Wattch:  Added for pop count generation (AFs) */
   qword_t val_ra, val_rb, val_rc, val_ra_result;
 
@@ -4364,6 +4618,14 @@ ruu_dispatch(void)
 	  /* stall until last operation is ready to issue */
 	  break;
 	}
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+      if(fetch_data[fetch_head].fetch_delay > sim_cycle) break;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
       /* get the next instruction from the IFETCH -> DISPATCH queue */
       inst = fetch_data[fetch_head].IR;
@@ -4664,7 +4926,26 @@ ruu_dispatch(void)
 #endif
 
 		  /* eff addr computation ready, queue it on ready list */
-		  readyq_enqueue(rs);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//sim_cycle + DECODE_LATENCY_OPTION - 1
+
+//		  readyq_enqueue(rs);
+
+if (DECODE_LATENCY_OPTION < 2)
+  {
+    readyq_enqueue(rs);
+  }
+else 
+  {
+    delay_ready_queue_addNode(&delay_ready_queue, rs, sim_cycle + DECODE_LATENCY_OPTION - 1);
+  }
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 		}
 	      else if (ONE_OPERANDS_READY(rs))
 		{
@@ -4691,7 +4972,26 @@ ruu_dispatch(void)
 		  lsq_store_data_access++;
 		  /* panic("store immediately ready"); */
 		  /* put operation on ready list, ruu_issue() issue it later */
-		  readyq_enqueue(lsq);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//sim_cycle + DECODE_LATENCY_OPTION - 1
+
+//		  readyq_enqueue(lsq);
+
+if (DECODE_LATENCY_OPTION < 2)
+  {
+    readyq_enqueue(rs);
+  }
+else 
+  {
+    delay_ready_queue_addNode(&delay_ready_queue, rs, sim_cycle + DECODE_LATENCY_OPTION - 1);
+  }
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 		}
 	    }
 	  else /* !(MD_OP_FLAGS(op) & F_MEM) */
@@ -4729,7 +5029,26 @@ ruu_dispatch(void)
 #endif
 
 		  /* put operation on ready list, ruu_issue() issue it later */
-		  readyq_enqueue(rs);
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//sim_cycle + DECODE_LATENCY_OPTION - 1
+
+//		  readyq_enqueue(rs);
+
+if (DECODE_LATENCY_OPTION < 2)
+  {
+    readyq_enqueue(rs);
+  }
+else 
+  {
+    delay_ready_queue_addNode(&delay_ready_queue, rs, sim_cycle + DECODE_LATENCY_OPTION - 1);
+  }
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 		  /* issue may continue */
 		  last_op = RSLINK_NULL;
 		}
@@ -4851,6 +5170,16 @@ ruu_dispatch(void)
 			    addr, sim_num_insn, sim_cycle))
 	dlite_main(regs.regs_PC, /* no next PC */0, sim_cycle, &regs, mem);
     }
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+  while( (tmp_rs = delay_ready_queue_deleteNode(&delay_ready_queue, sim_cycle)) != 0)
+    readyq_enqueue(tmp_rs);   
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 }
 
 
@@ -4924,6 +5253,14 @@ ruu_fetch(void)
   int stack_recover_idx;
   int branch_cnt;
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+  int extra_branch_latency;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
   for (i=0, branch_cnt=0;
        /* fetch up to as many instruction as the DISPATCH stage can decode */
        i < (ruu_decode_width * fetch_speed)
@@ -4933,6 +5270,14 @@ ruu_fetch(void)
        && !done;
        i++)
     {
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+  extra_branch_latency = 0;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
       /* Wattch: add power for i-fetch stage */
       icache_access++;
@@ -5066,7 +5411,23 @@ if (MD_OP_FLAGS(dvp_op) & F_STORE)
 	  /* get the next predicted fetch address; only use branch predictor
 	     result for branches (assumes pre-decode bits); NOTE: returned
 	     value may be 1 if bpred can only predict a direction */
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//	  if (MD_OP_FLAGS(op) & F_CTRL)
+//	    fetch_pred_PC =
+//	      bpred_lookup(pred,
+//			   /* branch address */fetch_regs_PC,
+//			   /* target address *//* FIXME: not computed */0,
+//			   /* opcode */op,
+//			   /* call? */MD_IS_CALL(op),
+//			   /* return? */MD_IS_RETURN(op),
+//			   /* updt */&(fetch_data[fetch_tail].dir_update),
+//			   /* RSB index */&stack_recover_idx);
+
 	  if (MD_OP_FLAGS(op) & F_CTRL)
+           {
 	    fetch_pred_PC =
 	      bpred_lookup(pred,
 			   /* branch address */fetch_regs_PC,
@@ -5076,6 +5437,12 @@ if (MD_OP_FLAGS(dvp_op) & F_STORE)
 			   /* return? */MD_IS_RETURN(op),
 			   /* updt */&(fetch_data[fetch_tail].dir_update),
 			   /* RSB index */&stack_recover_idx);
+	      extra_branch_latency = FETCH_BRANCH_EXTRA_LATENCY_OPTION;
+           }
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
 	  else
 	    fetch_pred_PC = 0;
 
@@ -5106,6 +5473,14 @@ if (MD_OP_FLAGS(dvp_op) & F_STORE)
       fetch_data[fetch_tail].pred_PC = fetch_pred_PC;
       fetch_data[fetch_tail].stack_recover_idx = stack_recover_idx;
       fetch_data[fetch_tail].ptrace_seq = ptrace_seq++;
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+      fetch_data[fetch_tail].fetch_delay = sim_cycle + FETCH_LATENCY_OPTION + extra_branch_latency;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
       /* for pipe trace */
       ptrace_newinst(fetch_data[fetch_tail].ptrace_seq,
@@ -5210,6 +5585,15 @@ simoo_mstate_obj(FILE *stream,			/* output stream */
 void
 sim_main(void)
 {
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+delay_ready_queue_initial(&delay_ready_queue);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
+
   /* ignore any floating point exceptions, they may occur on mis-speculated
      execution paths */
   signal(SIGFPE, SIG_IGN);
