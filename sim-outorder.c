@@ -489,19 +489,6 @@ static struct stat_stat_t *pcstat_sdists[MAX_PCSTAT_VARS];
 counter_t tmp_misses_il1;
 counter_t tmp_misses_dl1;
 
-struct pf_set_t
-{
-  md_addr_t tag;
-};
-
-struct pf_t
-{
-  int nsets;
-  struct pf_set_t sets[1]; 
-};
-
-struct pf_t *last;
-
 static int il1_bdi_compress;
 static int il1_bdi_check;
 static double il1_cacti_tag_static_power;
@@ -550,7 +537,14 @@ static int DECODE_LATENCY_OPTION;
 static int WRITEBACK_TO_DECODE_LATENCY_OPTION;
 static int WRITEBACK_TO_COMMIT_LATENCY_OPTION;
 
-tick_t count_comp_hits;
+counter_t count_comp_hits;
+counter_t pf_table_writes;
+counter_t pf_table_replacements;
+counter_t pf_table_reads;
+counter_t pf_table_hits;
+counter_t pf_table_correct;
+counter_t pf_table_incorrect;
+
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1808,6 +1802,34 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 	       "simpoint interval",
 	       &simpoint_interval, simpoint_interval, "%32d");
 
+  stat_reg_int(sdb, "count_comp_hits",
+	       "dl1 compressed hits",
+	       &count_comp_hits, count_comp_hits, "%32d");
+
+  stat_reg_int(sdb, "pf_table_writes",
+	       "prefetch table writes",
+	       &pf_table_writes, pf_table_writes, "%32d");
+
+  stat_reg_int(sdb, "pf_table_replacements",
+	       "prefetch table replacements",
+	       &pf_table_replacements, pf_table_replacements, "%32d");
+
+  stat_reg_int(sdb, "pf_table_reads",
+	       "prefetch table reads",
+	       &pf_table_reads, pf_table_reads, "%32d");
+
+  stat_reg_int(sdb, "pf_table_hits",
+	       "prefetch table hits",
+	       &pf_table_hits, pf_table_hits, "%32d");
+
+  stat_reg_int(sdb, "pf_table_correct",
+	       "prefetch table correct predictions",
+	       &pf_table_correct, pf_table_correct, "%32d");
+
+  stat_reg_int(sdb, "pf_table_incorrect",
+	       "prefetch table incorrect predictions",
+	       &pf_table_incorrect, pf_table_incorrect, "%32d");
+
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -2504,6 +2526,41 @@ readyq_enqueue(struct RUU_station *rs)		/* RS to enqueue */
 
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
+
+struct pf_set
+{
+  md_addr_t pc; //switch to tag later, store full pc for now
+  md_addr_t addr;
+};
+
+struct pf_table
+{
+  int nsets;
+  struct pf_set sets[1];
+};
+
+struct pf_table *last;
+
+struct pf_table * pf_table_init()
+{
+
+  struct pf_table *table;
+  int pf_nsets = 64;
+  int i;
+
+  table = (struct pf_table *) calloc(1, sizeof(struct pf_table) + (pf_nsets-1)*sizeof(struct pf_set));
+  if (!table) fatal("out of virtual memory");
+
+  table->nsets = pf_nsets;
+
+  for (i=0; i<pf_nsets; i++)
+  {
+    table->sets[i].pc = 0;
+    table->sets[i].addr = 0;
+  }
+
+return table;
+}
 
 struct delay_ready_queue_node
 {
@@ -3478,7 +3535,16 @@ ruu_issue(void)
 
 				      // we hit dl1 and had to decompress, so add rs->addr to table at rs->PC
 
+          			      if (last->sets[(rs->PC & 4032) >> 6].pc == rs->PC &&
+					  last->sets[(rs->PC & 4032) >> 6].addr == rs->addr) pf_table_correct++;
+ 				      if (last->sets[(rs->PC & 4032) >> 6].pc == rs->PC &&
+					  last->sets[(rs->PC & 4032) >> 6].addr != rs->addr) pf_table_incorrect++;
+
 				      count_comp_hits++;
+				      pf_table_writes++;
+				      if (last->sets[(rs->PC & 4032) >> 6].pc != 0) pf_table_replacements++;
+				      last->sets[(rs->PC & 4032) >> 6].pc = rs->PC;
+				      last->sets[(rs->PC & 4032) >> 6].addr = rs->addr;
 				    }
 
 ////////////////////////////////////////////////////////////////
@@ -4624,6 +4690,11 @@ struct RUU_station *tmp_rs;
 
 // if fetch_data[fetch_head].regs_PC in table...
 
+pf_table_reads++;
+
+if (last->sets[(fetch_data[fetch_head].regs_PC & 4032) >> 6].pc == fetch_data[fetch_head].regs_PC) pf_table_hits++;
+
+
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -5569,6 +5640,13 @@ sim_main(void)
 delay_ready_queue_initial(&delay_ready_queue);
 
 count_comp_hits = 0;
+pf_table_writes = 0;
+pf_table_replacements = 0;
+pf_table_reads = 0;
+pf_table_hits = 0;
+pf_table_correct = 0;
+pf_table_incorrect = 0;
+last = pf_table_init();
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
