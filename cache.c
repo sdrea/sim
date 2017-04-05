@@ -401,6 +401,8 @@ cp->sim_data_read_dynamic_energy = 0;
 cp->sim_data_write_dynamic_energy = 0;
 cp->last_cache_access = 0;
 
+cp->compressed_hits = 0;
+
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -1582,6 +1584,7 @@ vcd_lines_decompressor++;
 //  return (int) MAX(cp->hit_latency, (blk->ready - now));
 
   if (cmd == Read && cp->bdi_compress && bdi_size != 64) { 
+    cp->compressed_hits++;
     return (int) MAX( (cp->hit_latency + cp->decompression_latency), (blk->ready - now) );
   }
   else {
@@ -1960,6 +1963,7 @@ vcd_lines_decompressor++;
 //  return (int) MAX(cp->hit_latency, (blk->ready - now));
 
   if (cmd == Read && cp->bdi_compress) { 
+    cp->compressed_hits++;
     return (int) MAX( (cp->hit_latency + cp->decompression_latency), (blk->ready - now) );
   }
   else {

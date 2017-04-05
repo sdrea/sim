@@ -550,6 +550,8 @@ static int DECODE_LATENCY_OPTION;
 static int WRITEBACK_TO_DECODE_LATENCY_OPTION;
 static int WRITEBACK_TO_COMMIT_LATENCY_OPTION;
 
+tick_t count_comp_hits;
+
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -1417,25 +1419,6 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
 				   dl2_access_fn, /* hit lat */cache_dl2_lat);
 	}
     }
-
-//sdrea-begin
-////////////////////////////////////////////////////////////////
-
-int pf_nsets = 64;
-int i;
-
-last = (struct pf_t *) calloc(1, sizeof(struct pf_t) + (pf_nsets-1)*sizeof(struct pf_set_t));
-if (!last) fatal("out of virtual memory");
-
-last->nsets = pf_nsets;
-
-for (i=0; i<pf_nsets; i++)
-{
-last->sets[i].tag = 0;
-}
-
-////////////////////////////////////////////////////////////////
-//sdrea-end
 
   /* use a level 1 I-cache? */
   if (!mystricmp(cache_il1_opt, "none"))
@@ -3184,7 +3167,7 @@ ruu_writeback(void)
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
-// sim_cycle + WRITEBACK_TO_DECODE_LATENCY_OPTION - 1
+// F_MEM|F_STORE
 
 //			    readyq_enqueue(olink->rs);
 
@@ -3298,7 +3281,7 @@ lsq_refresh(void)
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
-// no change here
+// F_MEM|F_LOAD
 
 //	      readyq_enqueue(&LSQ[index]);
 
@@ -3484,9 +3467,19 @@ ruu_issue(void)
 //				  if (load_lat > cache_dl1_lat)
 //				    events |= PEV_CACHEMISS;
 
+				  tick_t tmp_comp_hits = cache_dl1->compressed_hits;
+
 				  tmp_misses_dl1 = cache_dl1->misses;
 				  load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
 				  if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
+				  if (cache_dl1->compressed_hits > tmp_comp_hits) 
+				    {
+				      // sdrea-todo prefetching
+
+				      // we hit dl1 and had to decompress, so add rs->addr to table at rs->PC
+
+				      count_comp_hits++;
+				    }
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -4624,6 +4617,13 @@ struct RUU_station *tmp_rs;
 
       if(fetch_data[fetch_head].fetch_delay > sim_cycle) break;
 
+// sdrea-todo prefetching
+// Now that we've fetched the inst, we check the table against the PC
+// if its there, decompress the noted cache line in dl1
+// first step: count how many times we got the correct cache line
+
+// if fetch_data[fetch_head].regs_PC in table...
+
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -5293,29 +5293,6 @@ ruu_fetch(void)
 	  /* read instruction from memory */
 	  MD_FETCH_INST(inst, mem, fetch_regs_PC);
 
-//sdrea-begin
-////////////////////////////////////////////////////////////////
-
-enum md_opcode dvp_op;
-MD_SET_OPCODE(dvp_op, inst);
-
-if (MD_OP_FLAGS(dvp_op) & F_LOAD) 
-{
-
-// Do something when we load from mem, for example check prefetch table and start decompressing.
-
-}
-
-if (MD_OP_FLAGS(dvp_op) & F_STORE) 
-{
-
-// Do something when we store to mem, for example wipe out block in prefetch table
-
-}
-
-////////////////////////////////////////////////////////////////
-//sdrea-end
-
 	  /* address is within program text, read instruction from memory */
 	  lat = cache_il1_lat;
 	  if (cache_il1)
@@ -5590,6 +5567,8 @@ sim_main(void)
 ////////////////////////////////////////////////////////////////
 
 delay_ready_queue_initial(&delay_ready_queue);
+
+count_comp_hits = 0;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
