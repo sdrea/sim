@@ -101,8 +101,15 @@ static counter_t size_compressed = 0;
 
 static counter_t vcd_lines_compressor = 0;
 static counter_t vcd_lines_decompressor = 0;
+static counter_t vcd_redlines_compressor = 0;
+static counter_t vcd_redlines_decompressor = 0;
 
 FILE *fp;
+
+char last_dvcdbuf2[516] = "";
+char last_dvcdbuf3[8] = "";
+
+char last_vcdbuf2[516] = "";
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -644,6 +651,12 @@ stat_reg_counter(sdb, "vcd_lines_decompressor", "Number of changes written to de
 
 stat_reg_formula(sdb, "vcd_filesize_compressor", "Approximate VCD filesize for compressor in MB", "(vcd_lines_compressor+204) / 1925", "%31.3f");
 stat_reg_formula(sdb, "vcd_filesize_decompressor", "Approximate VCD filesize for decompressor in MB", "(vcd_lines_decompressor+235) / 1900", "%29.3f");
+
+stat_reg_counter(sdb, "vcd_redlines_compressor", "REDUCED: Number of changes written to compressor VCD", &vcd_redlines_compressor, 0, "%31d");
+stat_reg_counter(sdb, "vcd_redlines_decompressor", "REDUCED: Number of changes written to decompressor VCD", &vcd_redlines_decompressor, 0, "%29d");
+
+stat_reg_formula(sdb, "vcd_redfilesize_compressor", "REDUCED: Approximate VCD filesize for compressor in MB", "(vcd_redlines_compressor+204) / 1925", "%28.3f");
+stat_reg_formula(sdb, "vcd_redfilesize_decompressor", "REDUCED: Approximate VCD filesize for decompressor in MB", "(vcd_redlines_decompressor+235) / 1900", "%26.3f");
 }
 
 ////////////////////////////////////////////////////////////////
@@ -1092,6 +1105,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
         vcddb[i] >>= 1;
   }}
 
+  if ( !strcmp(last_vcdbuf2,vcdbuf2) ) {
+
   /*
   fp = fopen(cbuf, "a");
   fprintf(fp, vcdbuf1);
@@ -1101,7 +1116,11 @@ cache_access(struct cache_t *cp,	/* cache to access */
   fclose(fp);
   */
 
-vcd_lines_compressor++;
+  vcd_redlines_compressor++;
+  }
+
+  vcd_lines_compressor++;
+  strcpy(last_vcdbuf2, vcdbuf2);
 
 }
 else
@@ -1506,6 +1525,8 @@ if (bdi_size != 64) {
   dvcdbuf3[6] = '$';
   dvcdbuf3[7] = '\0';
 
+  if (!strcmp(last_dvcdbuf2,dvcdbuf2) || !strcmp(last_dvcdbuf3,dvcdbuf3)) {
+
   /*
   fp = fopen(dbuf, "a");
   fprintf(fp, dvcdbuf1);
@@ -1517,8 +1538,12 @@ if (bdi_size != 64) {
   fclose(fp);
   */
 
-vcd_lines_decompressor++;
+  vcd_redlines_decompressor++;
+  }
 
+  vcd_lines_decompressor++;
+  strcpy(last_dvcdbuf2, dvcdbuf2);
+  strcpy(last_dvcdbuf3, dvcdbuf3);
 }
 }
   // Static energy is updated every cache access, regardless of operation and hit result  
@@ -1890,6 +1915,8 @@ if (bdi_size != 64) {
   dvcdbuf3[6] = '$';
   dvcdbuf3[7] = '\0';
 
+  if (!strcmp(last_dvcdbuf2,dvcdbuf2) || !strcmp(last_dvcdbuf3,dvcdbuf3)) {
+
   /*
   fp = fopen(dbuf, "a");
   fprintf(fp, dvcdbuf1);
@@ -1901,7 +1928,12 @@ if (bdi_size != 64) {
   fclose(fp);
   */
 
-vcd_lines_decompressor++;
+  vcd_redlines_decompressor++;
+  }
+
+  vcd_lines_decompressor++;
+  strcpy(last_dvcdbuf2, dvcdbuf2);
+  strcpy(last_dvcdbuf3, dvcdbuf3);
 
 }
 }

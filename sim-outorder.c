@@ -545,6 +545,8 @@ counter_t pf_table_hits;
 counter_t pf_table_correct;
 counter_t pf_table_incorrect;
 
+static int LAST_OUTCOME_SIZE;
+static int STRIDE_SIZE;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1242,6 +1244,14 @@ sim_reg_options(struct opt_odb_t *odb)
 
  opt_reg_int(odb, "-writeback_to_commit_lat", "Latency of writeback_to_commit unit",
 	      &WRITEBACK_TO_COMMIT_LATENCY_OPTION, /* default */0,
+	      /* print */TRUE, /* format */NULL);
+
+ opt_reg_int(odb, "-last_outcome_size", "Number of sets in Last Outcome Prefetch Table",
+	      &LAST_OUTCOME_SIZE, /* default */0,
+	      /* print */TRUE, /* format */NULL);
+
+ opt_reg_int(odb, "-stride_size", "Number of sets in Stride Prefetch Table",
+	      &STRIDE_SIZE, /* default */0,
 	      /* print */TRUE, /* format */NULL);
 
 ////////////////////////////////////////////////////////////////
@@ -2544,8 +2554,10 @@ struct pf_table *last;
 struct pf_table * pf_table_init()
 {
 
+  if (LAST_OUTCOME_SIZE == 0) return NULL;
+
   struct pf_table *table;
-  int pf_nsets = 64;
+  int pf_nsets = LAST_OUTCOME_SIZE;
   int i;
 
   table = (struct pf_table *) calloc(1, sizeof(struct pf_table) + (pf_nsets-1)*sizeof(struct pf_set));
@@ -3535,16 +3547,23 @@ ruu_issue(void)
 
 				      // we hit dl1 and had to decompress, so add rs->addr to table at rs->PC
 
-          			      if (last->sets[(rs->PC & 4032) >> 6].pc == rs->PC &&
-					  last->sets[(rs->PC & 4032) >> 6].addr == rs->addr) pf_table_correct++;
- 				      if (last->sets[(rs->PC & 4032) >> 6].pc == rs->PC &&
-					  last->sets[(rs->PC & 4032) >> 6].addr != rs->addr) pf_table_incorrect++;
-
 				      count_comp_hits++;
+
+                                      if (last != NULL) {
+
+          			      if ( last->sets[rs->PC & last->nsets-1].pc == rs->PC &&
+					  (last->sets[rs->PC & last->nsets-1].addr & ~63) == (rs->addr & ~63) ) 
+					    pf_table_correct++;
+ 				      if (last->sets[rs->PC & last->nsets-1].pc == rs->PC &&
+					  (last->sets[rs->PC & last->nsets-1].addr & ~63) != (rs->addr & ~63) ) 
+					    pf_table_incorrect++;
+				      
 				      pf_table_writes++;
-				      if (last->sets[(rs->PC & 4032) >> 6].pc != 0) pf_table_replacements++;
-				      last->sets[(rs->PC & 4032) >> 6].pc = rs->PC;
-				      last->sets[(rs->PC & 4032) >> 6].addr = rs->addr;
+				      if (last->sets[rs->PC & last->nsets-1].pc != 0) pf_table_replacements++;
+				      last->sets[rs->PC & last->nsets-1].pc = rs->PC;
+				      last->sets[rs->PC & last->nsets-1].addr = rs->addr;
+
+				      }
 				    }
 
 ////////////////////////////////////////////////////////////////
@@ -4690,10 +4709,15 @@ struct RUU_station *tmp_rs;
 
 // if fetch_data[fetch_head].regs_PC in table...
 
+if (last != NULL) {
+
 pf_table_reads++;
 
-if (last->sets[(fetch_data[fetch_head].regs_PC & 4032) >> 6].pc == fetch_data[fetch_head].regs_PC) pf_table_hits++;
+//if ( last->sets[(fetch_data[fetch_head].regs_PC & (64*last->nsets-1)) >> 6].pc == fetch_data[fetch_head].regs_PC ) 
+if ( last->sets[fetch_data[fetch_head].regs_PC & last->nsets-1].pc == fetch_data[fetch_head].regs_PC ) 
+  pf_table_hits++;
 
+}
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
