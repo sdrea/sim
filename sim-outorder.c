@@ -539,14 +539,15 @@ static int WRITEBACK_TO_COMMIT_LATENCY_OPTION;
 
 counter_t count_comp_hits;
 counter_t pf_table_writes;
-counter_t pf_table_replacements;
+
 counter_t pf_table_reads;
 counter_t pf_table_hits;
 counter_t pf_table_correct;
-counter_t pf_table_incorrect;
 
-static int LAST_OUTCOME_SIZE;
-static int STRIDE_SIZE;
+
+static int PREFETCH_TABLE_TYPE;
+static int PREFETCH_TABLE_SETS;
+static int PREFETCH_TABLE_ASSOC;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1246,12 +1247,16 @@ sim_reg_options(struct opt_odb_t *odb)
 	      &WRITEBACK_TO_COMMIT_LATENCY_OPTION, /* default */0,
 	      /* print */TRUE, /* format */NULL);
 
- opt_reg_int(odb, "-last_outcome_size", "Number of sets in Last Outcome Prefetch Table",
-	      &LAST_OUTCOME_SIZE, /* default */0,
+ opt_reg_int(odb, "-prefetch_table_type", "prefetch table type",
+	      &PREFETCH_TABLE_TYPE, /* default */0,
 	      /* print */TRUE, /* format */NULL);
 
- opt_reg_int(odb, "-stride_size", "Number of sets in Stride Prefetch Table",
-	      &STRIDE_SIZE, /* default */0,
+ opt_reg_int(odb, "-prefetch_table_sets", "Number of sets in Prefetch Table",
+	      &PREFETCH_TABLE_SETS, /* default */64,
+	      /* print */TRUE, /* format */NULL);
+
+ opt_reg_int(odb, "-prefetch_table_assoc", "Associativity of Prefetch Table",
+	      &PREFETCH_TABLE_ASSOC, /* default */1,
 	      /* print */TRUE, /* format */NULL);
 
 ////////////////////////////////////////////////////////////////
@@ -1820,10 +1825,10 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 	       "prefetch table writes",
 	       &pf_table_writes, pf_table_writes, "%32d");
 
-  stat_reg_int(sdb, "pf_table_replacements",
-	       "prefetch table replacements",
-	       &pf_table_replacements, pf_table_replacements, "%32d");
-
+  stat_reg_int(sdb, "pf_table_correct",
+	       "prefetch table correct predictions",
+	       &pf_table_correct, pf_table_correct, "%32d");
+/*
   stat_reg_int(sdb, "pf_table_reads",
 	       "prefetch table reads",
 	       &pf_table_reads, pf_table_reads, "%32d");
@@ -1832,13 +1837,8 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 	       "prefetch table hits",
 	       &pf_table_hits, pf_table_hits, "%32d");
 
-  stat_reg_int(sdb, "pf_table_correct",
-	       "prefetch table correct predictions",
-	       &pf_table_correct, pf_table_correct, "%32d");
+*/
 
-  stat_reg_int(sdb, "pf_table_incorrect",
-	       "prefetch table incorrect predictions",
-	       &pf_table_incorrect, pf_table_incorrect, "%32d");
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -2537,42 +2537,152 @@ readyq_enqueue(struct RUU_station *rs)		/* RS to enqueue */
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
-struct pf_set
+///////////////////////// LAST OUTCOME /////////////////////////
+
+struct pf_last_blk
 {
-  md_addr_t pc; //switch to tag later, store full pc for now
+  struct pf_last_blk *way_next;
+  struct pf_last_blk *way_prev;
+  md_addr_t tag; 
   md_addr_t addr;
 };
 
-struct pf_table
+struct pf_last_set
 {
-  int nsets;
-  struct pf_set sets[1];
+  struct pf_last_blk *way_head;
+  struct pf_last_blk *way_tail;
+  struct pf_last_blk *blks;
 };
 
-struct pf_table *last;
-
-struct pf_table * pf_table_init()
+struct pf_last_table
 {
+  int nsets;
+  int assoc;
+  struct pf_last_set sets[1];
+};
 
-  if (LAST_OUTCOME_SIZE == 0) return NULL;
+struct pf_last_table *last;
 
-  struct pf_table *table;
-  int pf_nsets = LAST_OUTCOME_SIZE;
-  int i;
+struct pf_last_table* pf_last_table_init()
+{
+  struct pf_last_table *table;
+  struct pf_last_blk *blk;
+  int i, j;
 
-  table = (struct pf_table *) calloc(1, sizeof(struct pf_table) + (pf_nsets-1)*sizeof(struct pf_set));
-  if (!table) fatal("out of virtual memory");
+    table = (struct pf_last_table *) calloc(1, sizeof(struct pf_last_table) + (PREFETCH_TABLE_SETS-1)*sizeof(struct pf_last_set));
+    if (!table) fatal("out of virtual memory");
 
-  table->nsets = pf_nsets;
+    table->nsets = PREFETCH_TABLE_SETS;
+    table->assoc = PREFETCH_TABLE_ASSOC;
 
-  for (i=0; i<pf_nsets; i++)
-  {
-    table->sets[i].pc = 0;
-    table->sets[i].addr = 0;
-  }
+    for (i=0; i<table->nsets; i++)
+    {
+      table->sets[i].way_head = NULL;
+      table->sets[i].way_tail = NULL;
+      table->sets[i].blks = (struct pf_last_blk *) calloc(1, (table->assoc*sizeof(struct pf_last_blk)));
+      if (!table->sets[i].blks) fatal("out of virtual memory");
 
-return table;
+      table->sets[i].way_head = table->sets[i].blks;
+      blk=table->sets[i].way_head;
+      blk->way_prev = NULL;
+      blk->way_next = NULL;
+      blk->tag = 0;
+      blk->addr = 0;
+
+      for (j=1; j<table->assoc; j++)
+      {
+        blk->way_next = blk + 1;
+        blk = blk->way_next;
+
+        blk->way_prev = blk - 1;
+        blk->way_next = NULL;
+        blk->tag = 0;
+        blk->addr = 0;
+      }
+
+      table->sets[i].way_tail = blk;
+
+    }
+
+    return table;
+
 }
+
+//////////////////////////// STRIDE ////////////////////////////
+
+struct pf_stride_blk
+{
+  struct pf_stride_blk *way_next;
+  struct pf_stride_blk *way_prev;
+  md_addr_t tag; 
+  md_addr_t addr;
+  long int stride;
+};
+
+struct pf_stride_set
+{
+  struct pf_stride_blk *way_head;
+  struct pf_stride_blk *way_tail;
+  struct pf_stride_blk *blks;
+};
+
+struct pf_stride_table
+{
+  int nsets;
+  int assoc;
+  struct pf_stride_set sets[1];
+};
+
+struct pf_stride_table *stride;
+
+struct pf_stride_table* pf_stride_table_init()
+{
+  struct pf_stride_table *table;
+  struct pf_stride_blk *blk;
+  int i, j;
+
+    table = (struct pf_stride_table *) calloc(1, sizeof(struct pf_stride_table) + (PREFETCH_TABLE_SETS-1)*sizeof(struct pf_stride_set));
+    if (!table) fatal("out of virtual memory");
+
+    table->nsets = PREFETCH_TABLE_SETS;
+    table->assoc = PREFETCH_TABLE_ASSOC;
+
+    for (i=0; i<table->nsets; i++)
+    {
+      table->sets[i].way_head = NULL;
+      table->sets[i].way_tail = NULL;
+      table->sets[i].blks = (struct pf_stride_blk *) calloc(1, (table->assoc*sizeof(struct pf_stride_blk)));
+      if (!table->sets[i].blks) fatal("out of virtual memory");
+
+      table->sets[i].way_head = table->sets[i].blks;
+      blk=table->sets[i].way_head;
+      blk->way_prev = NULL;
+      blk->way_next = NULL;
+      blk->tag = 0;
+      blk->addr = 0;
+      blk->stride = 0;
+
+      for (j=1; j<table->assoc; j++)
+      {
+        blk->way_next = blk + 1;
+        blk = blk->way_next;
+
+        blk->way_prev = blk - 1;
+        blk->way_next = NULL;
+        blk->tag = 0;
+        blk->addr = 0;
+        blk->stride = 0;
+      }
+
+      table->sets[i].way_tail = blk;
+
+    }
+
+    return table;
+
+}
+
+///////////////////////////// GHB //////////////////////////////
 
 struct delay_ready_queue_node
 {
@@ -3549,22 +3659,98 @@ ruu_issue(void)
 
 				      count_comp_hits++;
 
-                                      if (last != NULL) {
+                                      if (PREFETCH_TABLE_TYPE == 1)
+                                      {
 
-          			      if ( last->sets[rs->PC & last->nsets-1].pc == rs->PC &&
-					  (last->sets[rs->PC & last->nsets-1].addr & ~63) == (rs->addr & ~63) ) 
-					    pf_table_correct++;
- 				      if (last->sets[rs->PC & last->nsets-1].pc == rs->PC &&
-					  (last->sets[rs->PC & last->nsets-1].addr & ~63) != (rs->addr & ~63) ) 
-					    pf_table_incorrect++;
-				      
-				      pf_table_writes++;
-				      if (last->sets[rs->PC & last->nsets-1].pc != 0) pf_table_replacements++;
-				      last->sets[rs->PC & last->nsets-1].pc = rs->PC;
-				      last->sets[rs->PC & last->nsets-1].addr = rs->addr;
+				        struct pf_last_blk *blk;
+                                        int pred_good = 0;
+				        int pred_bad = 0;
+				        int set = rs->PC & last->nsets-1;
 
-				      }
-				    }
+				        for (blk=last->sets[set].way_head;
+					     blk;
+					     blk=blk->way_next)
+					{
+					  if ( blk->tag == (rs->PC & ~(last->nsets-1))  &&
+					     ( blk->addr & ~63 ) == ( rs->addr & ~63 ) ) 
+					     pred_good = 1;
+					}
+				        if (pred_good) pf_table_correct++;
+				        else
+				        {
+				          pf_table_writes++;
+
+					  blk=last->sets[set].way_tail;
+				          blk->tag = rs->PC & ~(last->nsets-1);
+				          blk->addr = rs->addr;
+					  if (last->assoc > 1) {
+					    blk->way_next = last->sets[set].way_head;
+					    last->sets[set].way_tail = blk->way_prev;
+					    blk->way_prev->way_next = NULL;
+					    blk->way_prev = NULL;
+					    last->sets[set].way_head = blk;
+                                            blk=blk->way_next;
+                                            blk->way_prev = last->sets[set].way_head;
+                                          }
+				        }
+                                      }
+				      if (PREFETCH_TABLE_TYPE == 2)
+                                      {
+
+				        struct pf_stride_blk *blk;
+                                        int pred_good = 0;
+				        int pred_bad = 0;
+				        int set = rs->PC & stride->nsets-1;
+					int tag = rs->PC & ~(stride->nsets-1);
+
+				        for (blk=stride->sets[set].way_head;
+					     blk;
+					     blk=blk->way_next)
+					{
+					  if ( blk->tag == (rs->PC & ~(stride->nsets-1))  &&
+					     ( (blk->addr + blk->stride) & ~63 ) == ( rs->addr & ~63 ) ) 
+					     pred_good = 1;
+					}
+				        if (pred_good) pf_table_correct++;
+				        else
+				        {
+				          pf_table_writes++;
+
+					    for (blk=stride->sets[set].way_head;
+					         blk;
+					         blk=blk->way_next)
+					    {
+					      if (blk->tag == tag) 
+					      {
+					        break;
+					      }
+					    }
+
+					  if (!blk) 
+					  {
+					    blk=stride->sets[set].way_tail;
+				            blk->tag = rs->PC & ~(stride->nsets-1);
+				            blk->stride = rs->addr - blk->addr;
+				            blk->addr = rs->addr;
+					    if (stride->assoc > 1) {
+					      blk->way_next = stride->sets[set].way_head;
+					      stride->sets[set].way_tail = blk->way_prev;
+					      blk->way_prev->way_next = NULL;
+					      blk->way_prev = NULL;
+					      stride->sets[set].way_head = blk;
+                                              blk=blk->way_next;
+                                              blk->way_prev = stride->sets[set].way_head;
+                                            }
+					  }
+					  else //FIXME: should move to head after update
+					  {
+				            blk->tag = rs->PC & ~(stride->nsets-1);
+				            blk->stride = rs->addr - blk->addr;
+				            blk->addr = rs->addr;
+					  }
+				        }
+                                      }
+                                    }
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -4702,22 +4888,46 @@ struct RUU_station *tmp_rs;
 
       if(fetch_data[fetch_head].fetch_delay > sim_cycle) break;
 
-// sdrea-todo prefetching
-// Now that we've fetched the inst, we check the table against the PC
-// if its there, decompress the noted cache line in dl1
-// first step: count how many times we got the correct cache line
+  if (PREFETCH_TABLE_TYPE == 1)
+  {
 
-// if fetch_data[fetch_head].regs_PC in table...
+    struct pf_last_blk *blk;
+    int set = fetch_data[fetch_head].regs_PC & last->nsets-1;
+    int tag = fetch_data[fetch_head].regs_PC & ~(last->nsets-1);
+    int hitt = 0;
 
-if (last != NULL) {
+    pf_table_reads++;
 
-pf_table_reads++;
+    for (blk=last->sets[set].way_head;
+         blk;
+         blk=blk->way_next)
+    {
+      if (blk->tag == tag) hitt = 1;
+    }
 
-//if ( last->sets[(fetch_data[fetch_head].regs_PC & (64*last->nsets-1)) >> 6].pc == fetch_data[fetch_head].regs_PC ) 
-if ( last->sets[fetch_data[fetch_head].regs_PC & last->nsets-1].pc == fetch_data[fetch_head].regs_PC ) 
-  pf_table_hits++;
+    if ( hitt )   pf_table_hits++;
 
-}
+  }
+  if (PREFETCH_TABLE_TYPE == 2)
+  {
+
+    struct pf_stride_blk *blk;
+    int set = fetch_data[fetch_head].regs_PC & stride->nsets-1;
+    int tag = fetch_data[fetch_head].regs_PC & ~(stride->nsets-1);
+    int hitt = 0;
+
+    pf_table_reads++;
+
+    for (blk=stride->sets[set].way_head;
+         blk;
+         blk=blk->way_next)
+    {
+      if (blk->tag == tag) hitt = 1;
+    }
+
+    if ( hitt )   pf_table_hits++;
+
+  }
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -5665,12 +5875,13 @@ delay_ready_queue_initial(&delay_ready_queue);
 
 count_comp_hits = 0;
 pf_table_writes = 0;
-pf_table_replacements = 0;
+
 pf_table_reads = 0;
 pf_table_hits = 0;
 pf_table_correct = 0;
-pf_table_incorrect = 0;
-last = pf_table_init();
+
+if (PREFETCH_TABLE_TYPE == 1) last = pf_last_table_init();
+if (PREFETCH_TABLE_TYPE == 2) stride = pf_stride_table_init();
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
