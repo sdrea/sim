@@ -1,5 +1,5 @@
 SIM_PATH=/home/sdrea/Desktop/sim/sim-outorder
-CFG_PATH=/home/sdrea/Desktop/sim/config/compressed.cfg
+CFG_PATH=/home/sdrea/Desktop/sim/config/compressed_4lat.cfg
 VCD_PATH=/home/sdrea/Desktop/sim/
 VCD=100M
 INT=100000000

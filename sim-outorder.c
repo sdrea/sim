@@ -3646,19 +3646,18 @@ ruu_issue(void)
 //				  if (load_lat > cache_dl1_lat)
 //				    events |= PEV_CACHEMISS;
 
-				  tick_t tmp_comp_hits = cache_dl1->compressed_hits;
-
+ 				  tick_t tmp_comp_hits = cache_dl1->compressed_hits;
 				  tmp_misses_dl1 = cache_dl1->misses;
-				  load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
-				  if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
-				  if (cache_dl1->compressed_hits > tmp_comp_hits) 
-				    {
-				      // sdrea-todo prefetching
 
-				      // we hit dl1 and had to decompress, so add rs->addr to table at rs->PC
-
-				      count_comp_hits++;
-
+				      if (PREFETCH_TABLE_TYPE == 0)
+                                      {
+				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
+				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
+				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
+				          {
+				            count_comp_hits++;
+				          }
+			              }
                                       if (PREFETCH_TABLE_TYPE == 1)
                                       {
 
@@ -3675,22 +3674,33 @@ ruu_issue(void)
 					     ( blk->addr & ~63 ) == ( rs->addr & ~63 ) ) 
 					     pred_good = 1;
 					}
-				        if (pred_good) pf_table_correct++;
+				        if (pred_good) 
+					{
+					  pf_table_correct++;
+					  load_lat = cache_dl1->hit_latency;
+					}
 				        else
 				        {
-				          pf_table_writes++;
+				 
+				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
+				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
+				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
+				          {
+				            count_comp_hits++;
+				            pf_table_writes++;
 
-					  blk=last->sets[set].way_tail;
-				          blk->tag = rs->PC & ~(last->nsets-1);
-				          blk->addr = rs->addr;
-					  if (last->assoc > 1) {
-					    blk->way_next = last->sets[set].way_head;
-					    last->sets[set].way_tail = blk->way_prev;
-					    blk->way_prev->way_next = NULL;
-					    blk->way_prev = NULL;
-					    last->sets[set].way_head = blk;
-                                            blk=blk->way_next;
-                                            blk->way_prev = last->sets[set].way_head;
+					    blk=last->sets[set].way_tail;
+				            blk->tag = rs->PC & ~(last->nsets-1);
+				            blk->addr = rs->addr;
+					    if (last->assoc > 1) {
+					      blk->way_next = last->sets[set].way_head;
+					      last->sets[set].way_tail = blk->way_prev;
+					      blk->way_prev->way_next = NULL;
+					      blk->way_prev = NULL;
+					      last->sets[set].way_head = blk;
+                                              blk=blk->way_next;
+                                              blk->way_prev = last->sets[set].way_head;
+                                            }
                                           }
 				        }
                                       }
@@ -3711,10 +3721,20 @@ ruu_issue(void)
 					     ( (blk->addr + blk->stride) & ~63 ) == ( rs->addr & ~63 ) ) 
 					     pred_good = 1;
 					}
-				        if (pred_good) pf_table_correct++;
+				        if (pred_good) 
+					{
+					  pf_table_correct++;
+					  load_lat = cache_dl1->hit_latency;
+					}
 				        else
 				        {
-				          pf_table_writes++;
+
+				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
+				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
+				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
+				          {
+				            count_comp_hits++;
+				            pf_table_writes++;
 
 					    for (blk=stride->sets[set].way_head;
 					         blk;
@@ -3726,31 +3746,41 @@ ruu_issue(void)
 					      }
 					    }
 
-					  if (!blk) 
-					  {
-					    blk=stride->sets[set].way_tail;
-				            blk->tag = rs->PC & ~(stride->nsets-1);
-				            blk->stride = rs->addr - blk->addr;
-				            blk->addr = rs->addr;
-					    if (stride->assoc > 1) {
-					      blk->way_next = stride->sets[set].way_head;
-					      stride->sets[set].way_tail = blk->way_prev;
-					      blk->way_prev->way_next = NULL;
-					      blk->way_prev = NULL;
-					      stride->sets[set].way_head = blk;
-                                              blk=blk->way_next;
-                                              blk->way_prev = stride->sets[set].way_head;
-                                            }
-					  }
-					  else //FIXME: should move to head after update
-					  {
-				            blk->tag = rs->PC & ~(stride->nsets-1);
-				            blk->stride = rs->addr - blk->addr;
-				            blk->addr = rs->addr;
+					    if (!blk) 
+					    {
+					      blk=stride->sets[set].way_tail;
+				              blk->tag = rs->PC & ~(stride->nsets-1);
+				              blk->stride = rs->addr - blk->addr;
+				              blk->addr = rs->addr;
+					      if (stride->assoc > 1) {
+					        blk->way_next = stride->sets[set].way_head;
+					        stride->sets[set].way_tail = blk->way_prev;
+					        blk->way_prev->way_next = NULL;
+					        blk->way_prev = NULL;
+					        stride->sets[set].way_head = blk;
+                                                blk=blk->way_next;
+                                                blk->way_prev = stride->sets[set].way_head;
+                                              }
+					    }
+					    else //FIXME: should move to head after update
+					    {
+				              blk->tag = rs->PC & ~(stride->nsets-1);
+				              blk->stride = rs->addr - blk->addr;
+				              blk->addr = rs->addr;
+					    }
 					  }
 				        }
                                       }
-                                    }
+				      if (PREFETCH_TABLE_TYPE == 3)
+                                      {
+				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
+				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
+				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
+				          {
+				            count_comp_hits++;
+				          }
+			              }
+                                    
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
