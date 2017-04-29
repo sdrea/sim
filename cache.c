@@ -1105,7 +1105,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
         vcddb[i] >>= 1;
   }}
 
-  if ( !strcmp(last_vcdbuf2,vcdbuf2) ) {
+  if ( strcmp(last_vcdbuf2,vcdbuf2) ) {
 
   /*
   fp = fopen(cbuf, "a");
@@ -1525,7 +1525,7 @@ if (bdi_size != 64) {
   dvcdbuf3[6] = '$';
   dvcdbuf3[7] = '\0';
 
-  if (!strcmp(last_dvcdbuf2,dvcdbuf2) || !strcmp(last_dvcdbuf3,dvcdbuf3)) {
+  if (strcmp(last_dvcdbuf2,dvcdbuf2) || strcmp(last_dvcdbuf3,dvcdbuf3)) {
 
   /*
   fp = fopen(dbuf, "a");
@@ -1915,7 +1915,7 @@ if (bdi_size != 64) {
   dvcdbuf3[6] = '$';
   dvcdbuf3[7] = '\0';
 
-  if (!strcmp(last_dvcdbuf2,dvcdbuf2) || !strcmp(last_dvcdbuf3,dvcdbuf3)) {
+  if (strcmp(last_dvcdbuf2,dvcdbuf2) || strcmp(last_dvcdbuf3,dvcdbuf3)) {
 
   /*
   fp = fopen(dbuf, "a");
