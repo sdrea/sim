@@ -1107,14 +1107,14 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
   if ( strcmp(last_vcdbuf2,vcdbuf2) ) {
 
-  /*
+  
   fp = fopen(cbuf, "a");
   fprintf(fp, vcdbuf1);
   fprintf(fp, "\n");
   fprintf(fp, vcdbuf2);
   fprintf(fp, "\n");
   fclose(fp);
-  */
+  
 
   vcd_redlines_compressor++;
   }
@@ -1527,7 +1527,7 @@ if (bdi_size != 64) {
 
   if (strcmp(last_dvcdbuf2,dvcdbuf2) || strcmp(last_dvcdbuf3,dvcdbuf3)) {
 
-  /*
+  
   fp = fopen(dbuf, "a");
   fprintf(fp, dvcdbuf1);
   fprintf(fp, "\n");
@@ -1536,7 +1536,7 @@ if (bdi_size != 64) {
   fprintf(fp, dvcdbuf3);
   fprintf(fp, "\n");
   fclose(fp);
-  */
+  
 
   vcd_redlines_decompressor++;
   }
@@ -1917,7 +1917,7 @@ if (bdi_size != 64) {
 
   if (strcmp(last_dvcdbuf2,dvcdbuf2) || strcmp(last_dvcdbuf3,dvcdbuf3)) {
 
-  /*
+  
   fp = fopen(dbuf, "a");
   fprintf(fp, dvcdbuf1);
   fprintf(fp, "\n");
@@ -1926,7 +1926,7 @@ if (bdi_size != 64) {
   fprintf(fp, dvcdbuf3);
   fprintf(fp, "\n");
   fclose(fp);
-  */
+  
 
   vcd_redlines_decompressor++;
   }
