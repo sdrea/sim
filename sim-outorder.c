@@ -785,7 +785,7 @@ sim_reg_options(struct opt_odb_t *odb)
 
   opt_reg_string(odb, "-vcd_path",
 		 "vcd file path",
-		 &vcdpath, "./", /* print */TRUE, NULL);
+		 &vcdpath, "", /* print */TRUE, NULL);
 
   opt_reg_string(odb, "-vcd_suffix",
 		 "vcd suffix",
@@ -6033,6 +6033,8 @@ fprintf(stderr, "sim: ** starting performance simulation **\n");
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
+if (vcdpath[0] != '\0') {
+
 time_t now;
 now = time(NULL);
 struct tm *ts;
@@ -6108,6 +6110,12 @@ fprintf(fp, "b0000 $\n");
 fprintf(fp, "$end\n");
 fprintf(fp, "\n");
 fclose(fp);
+
+}
+else {
+strcpy(cbuf, "");
+strcpy(dbuf, "");
+}
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
