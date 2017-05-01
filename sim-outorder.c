@@ -6043,7 +6043,7 @@ char tbuf[80];
 strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S %Z\n", ts);
 
 strcpy(cbuf, vcdpath);
-strcat(cbuf, "dl1_compressor.vcd");
+strcat(cbuf, "c.");
 strcat(cbuf, vcd);
 fp = fopen(cbuf, "w+");
 fprintf(fp, "$date\n");
@@ -6076,7 +6076,7 @@ fclose(fp);
 
 
 strcpy(dbuf, vcdpath);
-strcat(dbuf, "dl1_decompressor.vcd");
+strcat(dbuf, "d.");
 strcat(dbuf, vcd);
 fp = fopen(dbuf, "w+");
 fprintf(fp, "$date\n");
