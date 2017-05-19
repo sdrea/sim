@@ -542,12 +542,28 @@ counter_t pf_table_writes;
 
 counter_t pf_table_reads;
 counter_t pf_table_hits;
-counter_t pf_table_correct;
+counter_t pf_last_correct;
+counter_t pf_stride_correct;
+counter_t pf_no_correct;
 
 
 static int PREFETCH_TABLE_TYPE;
 static int PREFETCH_TABLE_SETS;
 static int PREFETCH_TABLE_ASSOC;
+
+static double pf_cacti_tag_static_power;
+static double pf_cacti_tag_read_dynamic_energy;
+static double pf_cacti_tag_write_dynamic_energy;
+static double pf_cacti_data_static_power;
+static double pf_cacti_data_read_dynamic_energy;
+static double pf_cacti_data_write_dynamic_energy;
+
+static double pf_sim_tag_static_power;
+static double pf_sim_tag_read_dynamic_energy;
+static double pf_sim_tag_write_dynamic_energy;
+static double pf_sim_data_static_power;
+static double pf_sim_data_read_dynamic_energy;
+static double pf_sim_data_write_dynamic_energy;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1259,6 +1275,30 @@ sim_reg_options(struct opt_odb_t *odb)
 	      &PREFETCH_TABLE_ASSOC, /* default */1,
 	      /* print */TRUE, /* format */NULL);
 
+ opt_reg_double(odb, "-pf:tag:static-power",
+                "pf tag leakage power (static power) (mW)",
+                &pf_cacti_tag_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pf:tag:read:dynamic-energy",
+                "pf tag dynamic read energy per access (nJ)",
+                &pf_cacti_tag_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pf:tag:write:dynamic-energy",
+                "pf tag dynamic write energy per access (nJ)",
+                &pf_cacti_tag_write_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pf:data:static-power",
+                "pf data leakage power (static power) (mW)",
+                &pf_cacti_data_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pf:data:read:dynamic-energy",
+                "pf data dynamic read energy per access (nJ)",
+                &pf_cacti_data_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pf:data:write:dynamic-energy",
+                "pf data dynamic write energy per access (nJ)",
+                &pf_cacti_data_write_dynamic_energy, 0, TRUE, NULL);
+
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -1825,9 +1865,15 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 	       "prefetch table writes",
 	       &pf_table_writes, pf_table_writes, "%32d");
 
-  stat_reg_int(sdb, "pf_table_correct",
-	       "prefetch table correct predictions",
-	       &pf_table_correct, pf_table_correct, "%32d");
+  stat_reg_int(sdb, "pf_last_correct",
+	       "prefetch last table correct predictions",
+	       &pf_last_correct, pf_last_correct, "%32d");
+  stat_reg_int(sdb, "pf_stride_correct",
+	       "prefetch stride table correct predictions",
+	       &pf_stride_correct, pf_stride_correct, "%32d");
+  stat_reg_int(sdb, "pf_no_correct",
+	       "prefetch no table correct predictions",
+	       &pf_no_correct, pf_no_correct, "%32d");
 /*
   stat_reg_int(sdb, "pf_table_reads",
 	       "prefetch table reads",
@@ -1837,8 +1883,33 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 	       "prefetch table hits",
 	       &pf_table_hits, pf_table_hits, "%32d");
 
-*/
 
+
+
+*/
+  stat_reg_double(sdb, "pf_sim_tag_static_power",
+               "PFTable Cache Tag Leakage Power (mW-cycles)",
+               &pf_sim_tag_static_power, 0, "%30.6f");
+
+  stat_reg_double(sdb, "pf_sim_tag_read_dynamic_energy",
+               "PFTable Cache Tag Dynamic Read Energy (nJ)", 
+	&pf_sim_tag_read_dynamic_energy, 0, "%23.6f");
+
+  stat_reg_double(sdb, "pf_sim_tag_write_dynamic_energy",
+               "PFTable Cache Tag Dynamic Write Energy (nJ)", 
+	&pf_sim_tag_write_dynamic_energy, 0, "%22.6f");
+
+  stat_reg_double(sdb, "pf_sim_data_static_power",
+               "PFTable Cache Data Leakage Power (mW-cycles)", 
+	&pf_sim_data_static_power, 0, "%29.6f");
+
+  stat_reg_double(sdb, "pf_sim_data_read_dynamic_energy",
+               "PFTable Cache Data Dynamic Read Energy (nJ)", 
+	&pf_sim_data_read_dynamic_energy, 0, "%22.6f");
+
+  stat_reg_double(sdb, "pf_sim_data_write_dynamic_energy",
+               "PFTable Cache Data Dynamic Write Energy (nJ)", 
+	&pf_sim_data_write_dynamic_energy, 0, "%21.6f");
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -2545,6 +2616,7 @@ struct pf_last_blk
   struct pf_last_blk *way_prev;
   md_addr_t tag; 
   md_addr_t addr;
+  int compressed_data_size;
 };
 
 struct pf_last_set
@@ -2616,6 +2688,7 @@ struct pf_stride_blk
   struct pf_stride_blk *way_prev;
   md_addr_t tag; 
   md_addr_t addr;
+  int compressed_data_size;
   long int stride;
   int state;
 };
@@ -3663,7 +3736,6 @@ ruu_issue(void)
 
 				        struct pf_last_blk *blk;
                                         int pred_good = 0;
-				        int pred_bad = 0;
 				        int set = rs->PC & last->nsets-1;
 
 				        for (blk=last->sets[set].way_head;
@@ -3676,12 +3748,38 @@ ruu_issue(void)
 					}
 				        if (pred_good) 
 					{
-					  pf_table_correct++;
+					  pf_last_correct++;
 					  load_lat = cache_dl1->hit_latency;
+
+					    for (blk=last->sets[set].way_head;
+					         blk;
+					         blk=blk->way_next)
+					    {
+					      if (blk->tag == (rs->PC & ~(last->nsets-1)) )
+					      {
+					        break;
+					      }
+					    }
+
+					  // Prefetch table is 4 byte data (addr) and tag is 32 bits
+
+					  // Prefetch table was a hit
+						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
+						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
+                                          // Prefetch table TAG READ
+						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
+                                          // Prefetch table DATA(ADDR) READ
+						pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
+					  // L1 compressed read
+						cache_dl1->sim_tag_read_dynamic_energy += cache_dl1->cacti_tag_read_dynamic_energy;
+						cache_dl1->sim_data_read_dynamic_energy += (double) blk->compressed_data_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
+						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
+						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
+						cache_dl1->last_cache_access = sim_cycle;
 					}
 				        else
 				        {
-				 
+				          pf_no_correct++;
 				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
 				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
 				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
@@ -3692,6 +3790,7 @@ ruu_issue(void)
 					    blk=last->sets[set].way_tail;
 				            blk->tag = rs->PC & ~(last->nsets-1);
 				            blk->addr = rs->addr;
+					    blk->compressed_data_size = cache_dl1->last_compressed_size;
 					    if (last->assoc > 1) {
 					      blk->way_next = last->sets[set].way_head;
 					      last->sets[set].way_tail = blk->way_prev;
@@ -3702,14 +3801,27 @@ ruu_issue(void)
                                               blk->way_prev = last->sets[set].way_head;
                                             }
                                           }
+
+					  // Prefetch table is 4 byte data (addr) and tag is 32 bits
+
+					  // Prefetch table was a miss
+						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
+						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
+                                          // Prefetch table TAG READ
+						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
+                                          // Prefetch table TAG WRITE
+						pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
+					  // Prefetch table DATA(ADDR) WRITE
+						pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
+
 				        }
                                       }
 				      if (PREFETCH_TABLE_TYPE == 2)
                                       {
 
 				        struct pf_stride_blk *blk;
-                                        int pred_good = 0;
-				        int pred_bad = 0;
+                                        int last_pred_good = 0;
+                                        int stride_pred_good = 0;
 				        int set = rs->PC & stride->nsets-1;
 					int tag = rs->PC & ~(stride->nsets-1);
 
@@ -3717,37 +3829,124 @@ ruu_issue(void)
 					     blk;
 					     blk=blk->way_next)
 					{
-					  if ( 
-						( blk->tag == (rs->PC & ~(stride->nsets-1)) && ( (blk->addr + blk->stride) & ~63 ) == ( rs->addr & ~63 ) && blk->state > 1)
-						||
-						( blk->tag == (rs->PC & ~(stride->nsets-1)) && ( (blk->addr) & ~63 ) == ( rs->addr & ~63 ) && blk->state < 2)
-					     ) {
-					    pred_good = 1;
+					  if ( blk->tag == (rs->PC & ~(stride->nsets-1)) && ( (blk->addr + blk->stride) & ~63 ) == ( rs->addr & ~63 ) && blk->state > 1)
+						stride_pred_good = 1;
+					  if ( blk->tag == (rs->PC & ~(stride->nsets-1)) && ( (blk->addr) & ~63 ) == ( rs->addr & ~63 ) && blk->state < 2)
+					        last_pred_good = 1;
+
+			
+
+						 
+					}
+				        if (stride_pred_good) // good prediction
+					{
+					  pf_stride_correct++;
+					  load_lat = cache_dl1->hit_latency;
+
+					    for (blk=stride->sets[set].way_head;
+					         blk;
+					         blk=blk->way_next)
+					    {
+					      if (blk->tag == tag) 
+					      {
+					        break;
+					      }
+					    }
+
+					  blk->addr = rs->addr;
+
+					  // Prefetch table is 4 byte data (addr) and tag is 32 bits + 2 bit state + 16 bit stride = 50 bits?
+
+					  // Prefetch table was a hit
+						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
+						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
+                                          // Prefetch table TAG READ
+						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
+                                          // Prefetch table DATA(ADDR) READ
+						pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
+					  // Prefetch table DATA(ADDR) WRITE
+						pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
+					  // L1 compressed read
+						cache_dl1->sim_tag_read_dynamic_energy += cache_dl1->cacti_tag_read_dynamic_energy;
+						cache_dl1->sim_data_read_dynamic_energy += (double) cache_dl1->last_compressed_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
+						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
+						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
+						cache_dl1->last_cache_access = sim_cycle;					  
+
+
+					}
+				        else if (last_pred_good) // good prediction
+					{
+					  pf_last_correct++;
+					  load_lat = cache_dl1->hit_latency;
+
+					    for (blk=stride->sets[set].way_head;
+					         blk;
+					         blk=blk->way_next)
+					    {
+					      if (blk->tag == tag) 
+					      {
+					        break;
+					      }
+					    }
 
 					    if (blk->state == 0) {
-						blk->state = 1;
 						blk->stride = rs->addr - blk->addr;
+						blk->addr = rs->addr;
+						blk->state = 1;
 					    }
 					    else if (blk->state == 1) {
-						blk->state = 1;
+						if (rs->addr - blk->addr == blk->stride) {
+						blk->addr = rs->addr;
+						blk->state = 2;
+						}
+						else {
 						blk->stride = rs->addr - blk->addr;
-					    }
-
+						blk->addr = rs->addr;
+						blk->state = 1;
+						}
 					  }
-					}
-				        if (pred_good) // good prediction, update latency and power and get out
-					{
-					  pf_table_correct++;
-					  load_lat = cache_dl1->hit_latency;
-                                          // add power
-					}
-				        else // bad prediction, update table with new stride and new
-				        {
+				
+					  // Prefetch table was a hit
+						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
+						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
+                                          // Prefetch table TAG READ
+						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
+					  // Prefetch table TAG WRITE
+						pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
+                                          // Prefetch table DATA(ADDR) READ
+						pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
+					  // L1 compressed read
+					  	cache_dl1->sim_tag_read_dynamic_energy += cache_dl1->cacti_tag_read_dynamic_energy;
+						cache_dl1->sim_data_read_dynamic_energy += (double) blk->compressed_data_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
+						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
+						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
+						cache_dl1->last_cache_access = sim_cycle;
 
+
+					}
+				        else // no prediction, update table with new stride and new
+				        {
+					  pf_no_correct++;
 				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
+
+					  // Prefetch table is 4 byte data (addr) and tag is 50 bits
+
+					  // Prefetch table was a miss
+						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
+						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
+                                          // Prefetch table TAG READ
+						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
+					  // Prefetch table TAG WRITE
+						pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
+					  // Prefetch table DATA(ADDR) WRITE
+						pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
+
+
 				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
 				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
 				          {
+					    
 				            count_comp_hits++;
 				            pf_table_writes++;
 
@@ -3764,9 +3963,13 @@ ruu_issue(void)
 					    if (!blk) 
 					    {
 					      blk=stride->sets[set].way_tail;
-				              blk->tag = rs->PC & ~(stride->nsets-1);
-				              blk->stride = rs->addr - blk->addr;
-				              blk->addr = rs->addr;
+
+						blk->tag = rs->PC & ~(stride->nsets-1);
+						blk->addr = rs->addr;
+						blk->stride = 0;
+						blk->state = 0;
+						blk->compressed_data_size = cache_dl1->last_compressed_size;
+
 					      if (stride->assoc > 1) {
 					        blk->way_next = stride->sets[set].way_head;
 					        stride->sets[set].way_tail = blk->way_prev;
@@ -3779,9 +3982,24 @@ ruu_issue(void)
 					    }
 					    else //FIXME: should move to head after update
 					    {
-				              blk->tag = rs->PC & ~(stride->nsets-1);
-				              blk->stride = rs->addr - blk->addr;
-				              blk->addr = rs->addr;
+
+					    if (blk->state == 0) {
+						blk->stride = rs->addr - blk->addr;
+						blk->addr = rs->addr;
+						blk->state = 1;
+					    }
+					    else if (blk->state > 0) {
+						if (rs->addr - blk->addr == blk->stride) {
+						blk->addr = rs->addr;
+						blk->state = 2;
+						}
+						else {
+						blk->stride = rs->addr - blk->addr;
+						blk->addr = rs->addr;
+						blk->state = 1;
+						}
+
+					    }
 					    }
 					  }
 				        }
@@ -4942,8 +5160,6 @@ struct RUU_station *tmp_rs;
 
     if ( hitt )   pf_table_hits++;
 
-    // else, do nothing... I should prefetch something anyway. in this case should I care about the tag and just pull whatever is at that set?
-    // or load the last address from any load instruction (bringing compulsory misses down to 1)
 
   }
   if (PREFETCH_TABLE_TYPE == 2)
@@ -4961,15 +5177,11 @@ struct RUU_station *tmp_rs;
          blk=blk->way_next)
     {
       if (blk->tag == tag) hitt = 1;
-      //if (blk->state == 0) count init
-      //if (blk->state == 1) count transient
-      //if (blk->state == 2) count steady
+    
     }
 
     if ( hitt )   pf_table_hits++;
 
-    // else, do nothing... I should prefetch something anyway. in this case should I care about the tag and just pull whatever is at that set?
-    // or load the last address from any load instruction (bringing compulsory misses down to 1)
 
   }
 
@@ -5922,7 +6134,9 @@ pf_table_writes = 0;
 
 pf_table_reads = 0;
 pf_table_hits = 0;
-pf_table_correct = 0;
+pf_last_correct = 0;
+pf_stride_correct = 0;
+pf_no_correct = 0;
 
 if (PREFETCH_TABLE_TYPE == 1) last = pf_last_table_init();
 if (PREFETCH_TABLE_TYPE == 2) stride = pf_stride_table_init();

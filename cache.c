@@ -409,6 +409,7 @@ cp->sim_data_write_dynamic_energy = 0;
 cp->last_cache_access = 0;
 
 cp->compressed_hits = 0;
+cp->last_compressed_size = 64;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1610,6 +1611,7 @@ if (bdi_size != 64) {
 
   if (cmd == Read && cp->bdi_compress && bdi_size != 64) { 
     cp->compressed_hits++;
+    cp->last_compressed_size = bdi_size;
     return (int) MAX( (cp->hit_latency + cp->decompression_latency), (blk->ready - now) );
   }
   else {
@@ -1996,6 +1998,7 @@ if (bdi_size != 64) {
 
   if (cmd == Read && cp->bdi_compress) { 
     cp->compressed_hits++;
+    cp->last_compressed_size = bdi_size;
     return (int) MAX( (cp->hit_latency + cp->decompression_latency), (blk->ready - now) );
   }
   else {

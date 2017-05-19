@@ -255,6 +255,7 @@ struct cache_t
   int compressor_frequency;
 
   tick_t compressed_hits;
+  int last_compressed_size;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
