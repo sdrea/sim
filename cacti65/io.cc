@@ -771,7 +771,15 @@ uca_org_t cacti_interface(
   g_ip->leakage_power_wt_nuca = nuca_obj_func_leakage_power;
   g_ip->area_wt_nuca = nuca_obj_func_area;
   g_ip->cycle_time_wt_nuca    = nuca_obj_func_cycle_time;
-  g_ip->delay_dev_nuca = dev_func_delay;
+
+//sdrea-begin
+//-----------
+
+  g_ip->delay_dev_nuca = nuca_dev_func_delay;
+
+//---------
+//sdrea-end
+
   g_ip->dynamic_power_dev_nuca = nuca_dev_func_dynamic_power;
   g_ip->leakage_power_dev_nuca = nuca_dev_func_leakage_power;
   g_ip->area_dev_nuca = nuca_dev_func_area;
@@ -1209,6 +1217,11 @@ void output_UCA(uca_org_t *fr)
   else {
     cout << "    Total dynamic read energy per access (nJ): " <<
       fr->power.readOp.dynamic*1e9 << endl;
+    //begin ehsan
+    cout << "    Ehsan: Total dynamic write energy per access (nJ): " <<
+      fr->power.writeOp.dynamic*1e9 << endl;
+    //end ehsan
+
     cout << "    Total leakage power of a bank"
       " (mW): " << fr->power.readOp.leakage*1e3 << endl;
   }
@@ -1349,6 +1362,10 @@ void output_UCA(uca_org_t *fr)
     cout << endl << endl << "Power Components:" << endl << endl;
     cout << "  Data array: Total dynamic read energy/access  (nJ): " <<
       fr->data_array2->power.readOp.dynamic * 1e9 << endl;
+    //begin ehsan
+    cout << "  Ehsan: Data array: Total dynamic write energy/access  (nJ): " <<
+      fr->data_array2->power.writeOp.dynamic * 1e9 << endl;
+    //end ehsan
     cout << "\tTotal leakage read/write power of a bank (mW): " <<
         fr->data_array2->power.readOp.leakage * 1e3 << endl;
     cout << "\tTotal energy in H-tree (that includes both "
@@ -1386,6 +1403,10 @@ void output_UCA(uca_org_t *fr)
     {
       cout << endl << "  Tag array:  Total dynamic read energy/access (nJ): " <<
         fr->tag_array2->power.readOp.dynamic * 1e9 << endl;
+      //begin ehsan
+      cout << endl << "  Ehsan: Tag array:  Total dynamic write energy/access (nJ): " <<
+        fr->tag_array2->power.writeOp.dynamic * 1e9 << endl;
+      //end ehsan
       cout << "\tTotal leakage read/write power of a bank (mW): " <<
           fr->tag_array2->power.readOp.leakage * 1e3 << endl;
       cout << "\tTotal energy in H-tree (that includes both "
