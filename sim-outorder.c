@@ -2617,6 +2617,7 @@ struct pf_stride_blk
   md_addr_t tag; 
   md_addr_t addr;
   long int stride;
+  int state;
 };
 
 struct pf_stride_set
@@ -2672,6 +2673,7 @@ struct pf_stride_table* pf_stride_table_init()
         blk->tag = 0;
         blk->addr = 0;
         blk->stride = 0;
+        blk->state = 0;
       }
 
       table->sets[i].way_tail = blk;
@@ -2681,8 +2683,6 @@ struct pf_stride_table* pf_stride_table_init()
     return table;
 
 }
-
-///////////////////////////// GHB //////////////////////////////
 
 struct delay_ready_queue_node
 {
@@ -3717,16 +3717,31 @@ ruu_issue(void)
 					     blk;
 					     blk=blk->way_next)
 					{
-					  if ( blk->tag == (rs->PC & ~(stride->nsets-1))  &&
-					     ( (blk->addr + blk->stride) & ~63 ) == ( rs->addr & ~63 ) ) 
-					     pred_good = 1;
+					  if ( 
+						( blk->tag == (rs->PC & ~(stride->nsets-1)) && ( (blk->addr + blk->stride) & ~63 ) == ( rs->addr & ~63 ) && blk->state > 1)
+						||
+						( blk->tag == (rs->PC & ~(stride->nsets-1)) && ( (blk->addr) & ~63 ) == ( rs->addr & ~63 ) && blk->state < 2)
+					     ) {
+					    pred_good = 1;
+
+					    if (blk->state == 0) {
+						blk->state = 1;
+						blk->stride = rs->addr - blk->addr;
+					    }
+					    else if (blk->state == 1) {
+						blk->state = 1;
+						blk->stride = rs->addr - blk->addr;
+					    }
+
+					  }
 					}
-				        if (pred_good) 
+				        if (pred_good) // good prediction, update latency and power and get out
 					{
 					  pf_table_correct++;
 					  load_lat = cache_dl1->hit_latency;
+                                          // add power
 					}
-				        else
+				        else // bad prediction, update table with new stride and new
 				        {
 
 				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
@@ -3771,16 +3786,6 @@ ruu_issue(void)
 					  }
 				        }
                                       }
-				      if (PREFETCH_TABLE_TYPE == 3)
-                                      {
-				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
-				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
-				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
-				          {
-				            count_comp_hits++;
-				          }
-			              }
-                                    
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -4937,6 +4942,9 @@ struct RUU_station *tmp_rs;
 
     if ( hitt )   pf_table_hits++;
 
+    // else, do nothing... I should prefetch something anyway. in this case should I care about the tag and just pull whatever is at that set?
+    // or load the last address from any load instruction (bringing compulsory misses down to 1)
+
   }
   if (PREFETCH_TABLE_TYPE == 2)
   {
@@ -4953,9 +4961,15 @@ struct RUU_station *tmp_rs;
          blk=blk->way_next)
     {
       if (blk->tag == tag) hitt = 1;
+      //if (blk->state == 0) count init
+      //if (blk->state == 1) count transient
+      //if (blk->state == 2) count steady
     }
 
     if ( hitt )   pf_table_hits++;
+
+    // else, do nothing... I should prefetch something anyway. in this case should I care about the tag and just pull whatever is at that set?
+    // or load the last address from any load instruction (bringing compulsory misses down to 1)
 
   }
 
