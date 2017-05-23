@@ -558,12 +558,20 @@ static double pf_cacti_data_static_power;
 static double pf_cacti_data_read_dynamic_energy;
 static double pf_cacti_data_write_dynamic_energy;
 
+static int pf_buf_lat;
+static double pf_cacti_buf_static_power;
+static double pf_cacti_buf_read_dynamic_energy;
+static double pf_cacti_buf_write_dynamic_energy;
+
 static double pf_sim_tag_static_power;
 static double pf_sim_tag_read_dynamic_energy;
 static double pf_sim_tag_write_dynamic_energy;
 static double pf_sim_data_static_power;
 static double pf_sim_data_read_dynamic_energy;
 static double pf_sim_data_write_dynamic_energy;
+static double pf_sim_buf_static_power;
+static double pf_sim_buf_read_dynamic_energy;
+static double pf_sim_buf_write_dynamic_energy;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1299,6 +1307,22 @@ sim_reg_options(struct opt_odb_t *odb)
                 "pf data dynamic write energy per access (nJ)",
                 &pf_cacti_data_write_dynamic_energy, 0, TRUE, NULL);
 
+ opt_reg_int(odb, "-pf:buf:lat", "Prefetch Buffer Latency",
+	      &pf_buf_lat, /* default */1,
+	      /* print */TRUE, /* format */NULL);
+
+  opt_reg_double(odb, "-pf:buf:static-power",
+                "pf buf leakage power (static power) (mW)",
+                &pf_cacti_buf_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pf:buf:read:dynamic-energy",
+                "pf buf dynamic read energy per access (nJ)",
+                &pf_cacti_buf_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pf:buf:write:dynamic-energy",
+                "pf buf dynamic write energy per access (nJ)",
+                &pf_cacti_buf_write_dynamic_energy, 0, TRUE, NULL);
+
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -1910,6 +1934,18 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
   stat_reg_double(sdb, "pf_sim_data_write_dynamic_energy",
                "PFTable Cache Data Dynamic Write Energy (nJ)", 
 	&pf_sim_data_write_dynamic_energy, 0, "%21.6f");
+
+  stat_reg_double(sdb, "pf_sim_buf_static_power",
+               "PFTable Cache buf Leakage Power (mW-cycles)", 
+	&pf_sim_buf_static_power, 0, "%29.6f");
+
+  stat_reg_double(sdb, "pf_sim_buf_read_dynamic_energy",
+               "PFTable Cache buf Dynamic Read Energy (nJ)", 
+	&pf_sim_buf_read_dynamic_energy, 0, "%22.6f");
+
+  stat_reg_double(sdb, "pf_sim_buf_write_dynamic_energy",
+               "PFTable Cache buf Dynamic Write Energy (nJ)", 
+	&pf_sim_buf_write_dynamic_energy, 0, "%21.6f");
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -3749,7 +3785,8 @@ ruu_issue(void)
 				        if (pred_good) 
 					{
 					  pf_last_correct++;
-					  load_lat = cache_dl1->hit_latency;
+					  //load_lat = cache_dl1->hit_latency;
+					  load_lat = pf_buf_lat;
 
 					    for (blk=last->sets[set].way_head;
 					         blk;
@@ -3776,6 +3813,10 @@ ruu_issue(void)
 						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
 						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
 						cache_dl1->last_cache_access = sim_cycle;
+					  // Plus I wrote to the prefetch buffer register containing the decompressed line, then read it, and calc static
+					 	pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
+					 	pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
+						pf_sim_buf_static_power = sim_cycle * pf_cacti_buf_static_power;
 					}
 				        else
 				        {
@@ -3841,7 +3882,8 @@ ruu_issue(void)
 				        if (stride_pred_good) // good prediction
 					{
 					  pf_stride_correct++;
-					  load_lat = cache_dl1->hit_latency;
+					  //load_lat = cache_dl1->hit_latency;
+					  load_lat = pf_buf_lat;
 
 					    for (blk=stride->sets[set].way_head;
 					         blk;
@@ -3871,14 +3913,19 @@ ruu_issue(void)
 						cache_dl1->sim_data_read_dynamic_energy += (double) cache_dl1->last_compressed_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
 						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
 						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
-						cache_dl1->last_cache_access = sim_cycle;					  
+						cache_dl1->last_cache_access = sim_cycle;
+					  // Plus I wrote to the prefetch buffer register containing the decompressed line, then read it, and calc static
+					 	pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
+					 	pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
+						pf_sim_buf_static_power = sim_cycle * pf_cacti_buf_static_power;					  
 
 
 					}
 				        else if (last_pred_good) // good prediction
 					{
 					  pf_last_correct++;
-					  load_lat = cache_dl1->hit_latency;
+					  //load_lat = cache_dl1->hit_latency;
+					  load_lat = pf_buf_lat;
 
 					    for (blk=stride->sets[set].way_head;
 					         blk;
@@ -3922,6 +3969,10 @@ ruu_issue(void)
 						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
 						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
 						cache_dl1->last_cache_access = sim_cycle;
+					  // Plus I wrote to the prefetch buffer register containing the decompressed line, then read it, and calc static
+					 	pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
+					 	pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
+						pf_sim_buf_static_power = sim_cycle * pf_cacti_buf_static_power;
 
 
 					}
