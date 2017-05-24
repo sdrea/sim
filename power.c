@@ -2329,12 +2329,6 @@ void calculate_power(power)
   power->regfile_power_nobit = power->regfile_decoder + 
     power->regfile_wordline + power->regfile_senseamp;
 
-//sdrea-begin
-////////////////////////////////////////////////////////////////
-
-//  dump_power_stats(power);
-
-////////////////////////////////////////////////////////////////
-//sdrea-end
+  dump_power_stats(power);
 
 }
