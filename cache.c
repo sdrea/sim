@@ -1108,7 +1108,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
   if ( strcmp(last_vcdbuf2,vcdbuf2) ) {
 
-  if  ( cbuf[0] != '\0' ) {
+  if  ( cbuf[0] != '\0' && cp->bdi_compress) {
   fp = fopen(cbuf, "a");
   fprintf(fp, vcdbuf1);
   fprintf(fp, "\n");
