@@ -1092,7 +1092,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   cp->last_cache_access = now;
 
   char vcdbuf1[32];
-  sprintf(vcdbuf1, "#%d", (1000/cp->compressor_frequency)*now);
+  sprintf(vcdbuf1, "#%llu", (unsigned long long) (1000/cp->compressor_frequency)*now);
 
   char vcdbuf2[516];
   vcdbuf2[0] = 'b';
@@ -1497,7 +1497,7 @@ if (bdi_size != 64) {
 
  
  char dvcdbuf1[32];
-  sprintf(dvcdbuf1, "#%d", (1000/cp->compressor_frequency)*now);
+  sprintf(dvcdbuf1, "#%llu", (unsigned long long) (1000/cp->compressor_frequency)*now);
 
   //db[0-63].. is the cache line being read from memory / written into cache / compressed
   
@@ -1888,7 +1888,7 @@ if (mem != NULL)
 if (bdi_size != 64) {
 
   char dvcdbuf1[32];
-  sprintf(dvcdbuf1, "#%d", (1000/cp->compressor_frequency)*now);
+  sprintf(dvcdbuf1, "#%llu", (unsigned long long) (1000/cp->compressor_frequency)*now);
 
   //db[0-63].. is the cache line being read from memory / written into cache / compressed
 
