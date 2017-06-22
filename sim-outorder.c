@@ -128,8 +128,7 @@ static int simpoint;
 static int simpoint_interval;
 static char *vcd;
 static char *vcdpath;
-char cbuf[256];
-char dbuf[256];
+
 FILE *fp;
 
 ////////////////////////////////////////////////////////////////
@@ -613,7 +612,7 @@ dl1_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
 //      lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize,
 //			 /* now */now, /* pudata */NULL, /* repl addr */NULL);
 
-      lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, NULL, NULL, NULL);
+      lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -685,7 +684,7 @@ if (cache_il2)
 //      lat = cache_access(cache_il2, cmd, baddr, NULL, bsize,
 //			 /* now */now, /* pudata */NULL, /* repl addr */NULL);
 
-      lat = cache_access(cache_il2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, NULL, NULL, NULL);
+      lat = cache_access(cache_il2, cmd, baddr, NULL, bsize, /* now */now, /* pudata */NULL, /* repl addr */NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -3080,7 +3079,7 @@ ruu_commit(void)
 //			events |= PEV_CACHEMISS;
 
 		      tmp_misses_dl1 = cache_dl1->misses;
-		      lat = cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
+		      lat = cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3), NULL, 4, sim_cycle, NULL, NULL, mem);
 		      if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
 
 
@@ -3103,7 +3102,7 @@ ruu_commit(void)
 //				     NULL, 4, sim_cycle, NULL, NULL);
 
 		      lat = cache_access(dtlb, Read, (LSQ[LSQ_head].addr & ~3),
-				     NULL, 4, sim_cycle, NULL, NULL, NULL, NULL, NULL);
+				     NULL, 4, sim_cycle, NULL, NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -3760,7 +3759,7 @@ ruu_issue(void)
 
 				      if (PREFETCH_TABLE_TYPE == 0)
                                       {
-				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
+				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
 				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
 				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
 				          {
@@ -3821,7 +3820,7 @@ ruu_issue(void)
 				        else
 				        {
 				          pf_no_correct++;
-				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
+				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
 				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
 				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
 				          {
@@ -3979,7 +3978,7 @@ ruu_issue(void)
 				        else // no prediction, update table with new stride and new
 				        {
 					  pf_no_correct++;
-				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, cbuf, dbuf, mem);
+				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
 
 					  // Prefetch table is 4 byte data (addr) and tag is 50 bits
 
@@ -4083,7 +4082,7 @@ ruu_issue(void)
 
 			      tlb_lat =
 				cache_access(dtlb, Read, (rs->addr & ~3),
-					     NULL, 4, sim_cycle, NULL, NULL, NULL, NULL, NULL);
+					     NULL, 4, sim_cycle, NULL, NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -5923,7 +5922,7 @@ ruu_fetch(void)
 //		last_inst_missed = TRUE;
 
 	      tmp_misses_il1 = cache_il1->misses;
-	      lat = cache_access(cache_il1, Read, IACOMPRESS(fetch_regs_PC), NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle, NULL, NULL, NULL, NULL, NULL);
+	      lat = cache_access(cache_il1, Read, IACOMPRESS(fetch_regs_PC), NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle, NULL, NULL, NULL);
 	      if (cache_il1->misses > tmp_misses_il1) last_inst_missed = TRUE;
 
 ////////////////////////////////////////////////////////////////
@@ -5948,7 +5947,7 @@ ruu_fetch(void)
 	      tlb_lat =
 		cache_access(itlb, Read, IACOMPRESS(fetch_regs_PC),
 			     NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle,
-			     NULL, NULL, NULL, NULL, NULL);
+			     NULL, NULL, NULL);
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -6312,7 +6311,7 @@ fprintf(stderr, "sim: ** starting performance simulation **\n");
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
-if (vcdpath[0] != '\0') {
+if (cache_dl1->write_vcd) {
 
 time_t now;
 now = time(NULL);
@@ -6321,10 +6320,10 @@ ts = localtime(&now);
 char tbuf[80];
 strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S %Z\n", ts);
 
-strcpy(cbuf, vcdpath);
-strcat(cbuf, "c.");
-strcat(cbuf, vcd);
-fp = fopen(cbuf, "w+");
+strcpy(cache_dl1->cVCDname, vcdpath);
+strcat(cache_dl1->cVCDname, "c.dl1.");
+strcat(cache_dl1->cVCDname, vcd);
+fp = fopen(cache_dl1->cVCDname, "w+");
 fprintf(fp, "$date\n");
 fprintf(fp, tbuf);
 fprintf(fp, "$end\n");
@@ -6354,10 +6353,10 @@ fprintf(fp, "\n");
 fclose(fp);
 
 
-strcpy(dbuf, vcdpath);
-strcat(dbuf, "d.");
-strcat(dbuf, vcd);
-fp = fopen(dbuf, "w+");
+strcpy(cache_dl1->dVCDname, vcdpath);
+strcat(cache_dl1->dVCDname, "d.dl1.");
+strcat(cache_dl1->dVCDname, vcd);
+fp = fopen(cache_dl1->dVCDname, "w+");
 fprintf(fp, "$date\n");
 fprintf(fp, tbuf);
 fprintf(fp, "$end\n");
@@ -6391,10 +6390,7 @@ fprintf(fp, "\n");
 fclose(fp);
 
 }
-else {
-strcpy(cbuf, "");
-strcpy(dbuf, "");
-}
+
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
