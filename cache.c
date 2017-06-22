@@ -1,13 +1,12 @@
-// Variant of SimpleScalar developed for modelling cache compression and prefetching
-// Based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
-//
-// changes wrapped in //sdrea-begin ... //sdrea-end
-// or begin with //sdrea
-//
-// Sean Rea
-// sdrea@lakeheadu.ca
-// 2016-2017
-////////////////////////////////////////////////////////////////
+/* 
+ * cfetch - a variant of SimpleScalar developed for modelling cache compression and prefetching
+ * based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
+ * changes are commented //sdrea
+ *
+ * Sean Rea
+ * sdrea@lakeheadu.ca
+ * 2016-2017
+ */
 
 /* cache.c - cache module routines */
 
@@ -69,8 +68,7 @@
 #include "machine.h"
 #include "cache.h"
 
-//sdrea
-#include "rcp_cache.h"
+#include "cfetch.h" //sdrea
 
 /* cache access macros */
 #define CACHE_TAG(cp, addr)	((addr) >> (cp)->tag_shift)
@@ -353,9 +351,7 @@ cache_create(char *name,		/* name of the cache */
   cp->writebacks = 0;
   cp->invalidations = 0;
 
-//sdrea
-rcp_init_cache(cp);
-
+  cp->cfetch = cfetch_init_cache(cp); //sdrea
 
   /* blow away the last block accessed */
   cp->last_tagset = 0;
@@ -400,8 +396,7 @@ rcp_init_cache(cp);
 	  blk->tag = 0;
 	  blk->ready = 0;
 
-//sdrea
-rcp_init_blk(blk);
+          cfetch_init_blk(blk); //sdrea
 
 	  blk->user_data = (usize != 0
 			    ? (byte_t *)calloc(usize, sizeof(byte_t)) : NULL);
@@ -495,8 +490,8 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
   sprintf(buf1, "%s.invalidations / %s.accesses", name, name);
   stat_reg_formula(sdb, buf, "invalidation rate (i.e., invs/ref)", buf1, NULL);
 
-  //sdrea
-  rcp_cache_reg_stats (cp, sdb);
+
+  cfetch_cache_reg_stats (cp, sdb); //sdrea
 
 }
 
@@ -532,14 +527,11 @@ cache_access(struct cache_t *cp,	/* cache to access */
 	     tick_t now,		/* time of access */
 	     byte_t **udata,		/* for return of user data ptr */
 	     md_addr_t *repl_addr,	/* for address of replaced block */
-             
-             //sdrea
-             struct mem_t *mem)
+             struct mem_t *mem) //sdrea
 {
-
-  //sdrea
-  byte_t bdi_encode = -1;
-  qword_t bdi_mask = -1;
+  
+  byte_t bdi_encode = -1; //sdrea
+  qword_t bdi_mask = -1; //sdrea
 
   byte_t *p = vp;
   md_addr_t tag = CACHE_TAG(cp, addr);
@@ -602,9 +594,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* **MISS** */
   cp->misses++;
 
-//sdrea
-rcp_cache_miss(cmd, cp, mem, addr, now, &bdi_encode, &bdi_mask);
-
+  cfetch_cache_miss(cmd, cp, mem, addr, now, &bdi_encode, &bdi_mask); //sdrea
 
   /* select the appropriate block to replace, and re-link this entry to
      the appropriate place in the way list */
@@ -663,10 +653,7 @@ rcp_cache_miss(cmd, cp, mem, addr, now, &bdi_encode, &bdi_mask);
   repl->tag = tag;
   repl->status = CACHE_BLK_VALID;	/* dirty bit set on update */
 
-
-//sdrea
-rcp_update_blk(repl, bdi_encode, bdi_mask);
-
+  cfetch_update_blk(repl, bdi_encode, bdi_mask); //sdrea
 
   /* read data block */
   lat += cp->blk_access_fn(Read, CACHE_BADDR(cp, addr), cp->bsize,
@@ -702,9 +689,7 @@ rcp_update_blk(repl, bdi_encode, bdi_mask);
   /* **HIT** */
   cp->hits++;
 
-
-//sdrea
-lat = rcp_cache_hit(cmd, cp, mem, addr, now, blk);
+  lat = cfetch_cache_hit(cmd, cp, mem, addr, now, blk); //sdrea
 
   /* copy data out of cache block, if block exists */
   if (cp->balloc)
@@ -735,18 +720,14 @@ lat = rcp_cache_hit(cmd, cp, mem, addr, now, blk);
 
   /* return first cycle data is available to access */
 
-  // sdrea
-  return (int) MAX(lat, (blk->ready - now));
+  return (int) MAX(lat, (blk->ready - now)); // sdrea
 
   cache_fast_hit: /* fast hit handler */
   
   /* **FAST HIT** */
   cp->hits++;
 
-
-//sdrea
-lat = rcp_cache_hit(cmd, cp, mem, addr, now, blk);
-
+  lat = cfetch_cache_hit(cmd, cp, mem, addr, now, blk); //sdrea
 
   /* copy data out of cache block, if block exists */
   if (cp->balloc)
@@ -772,8 +753,7 @@ lat = rcp_cache_hit(cmd, cp, mem, addr, now, blk);
 
   /* return first cycle data is available to access */
 
-  //sdrea
-  return (int) MAX(lat, (blk->ready - now));
+  return (int) MAX(lat, (blk->ready - now)); //sdrea
 
 }
 

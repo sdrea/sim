@@ -288,7 +288,7 @@ SRCS =	main.c sim-fast.c sim-safe.c sim-cache.c sim-profile.c \
 	target-pisa/symbol.c \
 	target-alpha/alpha.c target-alpha/loader.c target-alpha/syscall.c \
 	target-alpha/symbol.c \
-        rcp_cache.c
+        cfetch.c
 
 HDRS =	syscall.h memory.h regs.h sim.h loader.h cache.h bpred.h ptrace.h \
 	eventq.h resource.h endian.h dlite.h symbol.h eval.h bitmap.h \
@@ -296,7 +296,7 @@ HDRS =	syscall.h memory.h regs.h sim.h loader.h cache.h bpred.h ptrace.h \
 	target-pisa/pisa.h target-pisa/pisabig.h target-pisa/pisalittle.h \
 	target-pisa/pisa.def target-pisa/ecoff.h \
 	target-alpha/alpha.h target-alpha/alpha.def target-alpha/ecoff.h \
-        rcp_cache.h
+        cfetch.h
 
 #
 # common objects
@@ -306,7 +306,7 @@ OBJS =	main.$(OEXT) syscall.$(OEXT) memory.$(OEXT) regs.$(OEXT) \
 	eval.$(OEXT) options.$(OEXT) stats.$(OEXT) eio.$(OEXT) \
 	range.$(OEXT) misc.$(OEXT) power.$(OEXT) \
         machine.$(OEXT) \
-        rcp_cache.$(OEXT)
+        cfetch.$(OEXT)
 
 #
 # programs to build

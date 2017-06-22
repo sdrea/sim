@@ -1,6 +1,19 @@
+/* 
+ * cfetch - a variant of SimpleScalar developed for modelling cache compression and prefetching
+ * based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
+ * changes are commented //sdrea
+ *
+ * Sean Rea
+ * sdrea@lakeheadu.ca
+ * 2016-2017
+ */
+
+/* cfetch.c - compression and prefetching routines */
+
 #include "machine.h"
 #include "memory.h"
 #include "cache.h"
+#include "cfetch.h"
 #include <string.h>
 
 #define CACHE_TAG(cp, addr)	((addr) >> (cp)->tag_shift)
@@ -13,7 +26,7 @@ static char last_vcdbuf2[516] = "";
 
 FILE *fp;
 
-void rcp_cache_reg_stats ( struct cache_t *cp,
+void cfetch_cache_reg_stats ( struct cache_t *cp,
 		    struct stat_sdb_t *sdb )	
 {
 
@@ -24,83 +37,83 @@ void rcp_cache_reg_stats ( struct cache_t *cp,
 
   sprintf(buf, "%s_sim_tag_static_power", name);
   sprintf(buf1, "%s Cache Tag Leakage Power (mW-cycles)", name);
-  stat_reg_double(sdb, buf, buf1, &cp->sim_tag_static_power, 0, "%30.6f");
+  stat_reg_double(sdb, buf, buf1, &cp->cfetch->sim_tag_static_power, 0, "%30.6f");
 
   sprintf(buf, "%s_sim_tag_read_dynamic_energy", name);
   sprintf(buf1, "%s Cache Tag Dynamic Read Energy (nJ)", name);
-  stat_reg_double(sdb, buf, buf1, &cp->sim_tag_read_dynamic_energy, 0, "%23.6f");
+  stat_reg_double(sdb, buf, buf1, &cp->cfetch->sim_tag_read_dynamic_energy, 0, "%23.6f");
 
   sprintf(buf, "%s_sim_tag_write_dynamic_energy", name);
   sprintf(buf1, "%s Cache Tag Dynamic Write Energy (nJ)", name);
-  stat_reg_double(sdb, buf, buf1, &cp->sim_tag_write_dynamic_energy, 0, "%22.6f");
+  stat_reg_double(sdb, buf, buf1, &cp->cfetch->sim_tag_write_dynamic_energy, 0, "%22.6f");
 
   sprintf(buf, "%s_sim_data_static_power", name);
   sprintf(buf1, "%s Cache Data Leakage Power (mW-cycles)", name);
-  stat_reg_double(sdb, buf, buf1, &cp->sim_data_static_power, 0, "%29.6f");
+  stat_reg_double(sdb, buf, buf1, &cp->cfetch->sim_data_static_power, 0, "%29.6f");
 
   sprintf(buf, "%s_sim_data_read_dynamic_energy", name);
   sprintf(buf1, "%s Cache Data Dynamic Read Energy (nJ)", name);
-  stat_reg_double(sdb, buf, buf1, &cp->sim_data_read_dynamic_energy, 0, "%22.6f");
+  stat_reg_double(sdb, buf, buf1, &cp->cfetch->sim_data_read_dynamic_energy, 0, "%22.6f");
 
   sprintf(buf, "%s_sim_data_write_dynamic_energy", name);
   sprintf(buf1, "%s Cache Data Dynamic Write Energy (nJ)", name);
-  stat_reg_double(sdb, buf, buf1, &cp->sim_data_write_dynamic_energy, 0, "%21.6f");
+  stat_reg_double(sdb, buf, buf1, &cp->cfetch->sim_data_write_dynamic_energy, 0, "%21.6f");
 
   sprintf(buf, "%s_count_check_lines", name);
   sprintf(buf1, "%s Cache lines checked for compressibility", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_check_lines, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_check_lines, 0, "%32d");
 
   sprintf(buf, "%s_count_compressible_any", name);
   sprintf(buf1, "%s Count of cache lines compressible", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_compressible_any, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_compressible_any, 0, "%32d");
 
   sprintf(buf, "%s_count_encode_lines", name);
   sprintf(buf1, "%s Cache lines checked for compression", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_lines, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_lines, 0, "%32d");
 
   sprintf(buf, "%s_count_encode_0000_zeros", name);
   sprintf(buf1, "%s Cache blocks compressed as zeros", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_0000_zeros, 0, "%31d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_0000_zeros, 0, "%31d");
 
   sprintf(buf, "%s_count_encode_0001_repeats", name);
   sprintf(buf1, "%s Cache blocks compressed as repeating values", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_0001_repeats, 0, "%29d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_0001_repeats, 0, "%29d");
 
   sprintf(buf, "%s_count_encode_0010_b8d1", name);
   sprintf(buf1, "%s Cache blocks compressed as base 8 delta 1", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_0010_b8d1, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_0010_b8d1, 0, "%32d");
 
   sprintf(buf, "%s_count_encode_0011_b8d2", name);
   sprintf(buf1, "%s Cache blocks compressed as base 8 delta 2", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_0011_b8d2, 0,"%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_0011_b8d2, 0,"%32d");
 
   sprintf(buf, "%s_count_encode_0100_b8d4", name);
   sprintf(buf1, "%s Cache blocks compressed as base 8 delta 4", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_0100_b8d4, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_0100_b8d4, 0, "%32d");
 
   sprintf(buf, "%s_count_encode_0101_b4d1", name);
   sprintf(buf1, "%s Cache blocks compressed as base 4 delta 1", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_0101_b4d1, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_0101_b4d1, 0, "%32d");
 
   sprintf(buf, "%s_count_encode_0110_b4d2", name);
   sprintf(buf1, "%s Cache blocks compressed as base 4 delta 2", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_0110_b4d2, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_0110_b4d2, 0, "%32d");
 
   sprintf(buf, "%s_count_encode_0111_b2d1", name);
   sprintf(buf1, "%s Cache blocks compressed as base 2 delta 1", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_0111_b2d1, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_0111_b2d1, 0, "%32d");
 
   sprintf(buf, "%s_count_encode_1111_uncompressed", name);
   sprintf(buf1, "%s Uncompressed cache lines", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->count_encode_1111_uncompressed, 0, "%24d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->count_encode_1111_uncompressed, 0, "%24d");
 
   sprintf(buf, "%s_size_compressed", name);
   sprintf(buf1, "%s Size of compressed cache lines", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->size_compressed, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->size_compressed, 0, "%32d");
 
   sprintf(buf, "%s_size_uncompressed", name);
   sprintf(buf1, "%s Size of uncompressed cache lines", name);
-  stat_reg_counter(sdb, buf, buf1, &cp->size_uncompressed, 0, "%32d");
+  stat_reg_counter(sdb, buf, buf1, &cp->cfetch->size_uncompressed, 0, "%32d");
 
 }
 
@@ -108,7 +121,7 @@ void rcp_cache_reg_stats ( struct cache_t *cp,
 //
 
 
-void rcp_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_addr_t addr, tick_t now, byte_t *encode, qword_t *mask) {
+void cfetch_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_addr_t addr, tick_t now, byte_t *encode, qword_t *mask) {
 
   bool_t zeros = 1, repeats = 1, delta81 = 1, delta82 = 1, delta84 = 1, delta41 = 1, delta42 = 1, delta21 = 1;
   qword_t delta81mask = -1, delta82mask = -1, delta84mask = -1, delta41mask = -1, delta42mask = -1, delta21mask = -1;
@@ -191,10 +204,10 @@ void rcp_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md
 
           }
 
-	      cp->count_check_lines++;
-              if (zeros == 1 || repeats == 1 || delta81 == 1 || delta82 == 1 || delta84 == 1 || delta41 == 1 || delta42 == 1 || delta21 == 1) {cp->count_compressible_any++;}
+	      cp->cfetch->count_check_lines++;
+              if (zeros == 1 || repeats == 1 || delta81 == 1 || delta82 == 1 || delta84 == 1 || delta41 == 1 || delta42 == 1 || delta21 == 1) {cp->cfetch->count_compressible_any++;}
 
-          if (cp->bdi_compress) 
+          if (cp->cfetch->bdi_compress) 
             {
 
               if (zeros == 1)         { bdi_encode = 0; bdi_mask = -1; }
@@ -208,59 +221,59 @@ void rcp_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md
               else                    { bdi_encode = 15; bdi_mask = -1;}
 
 
-      cp->count_encode_lines++;
+      cp->cfetch->count_encode_lines++;
 
       switch (bdi_encode)
         {
           case 0:
             //zeros
-            cp->count_encode_0000_zeros++;
+            cp->cfetch->count_encode_0000_zeros++;
             bdi_size = 8; // 1 segment, 8 bytes
           break;
           case 1:
             //repeats
-            cp->count_encode_0001_repeats++;
+            cp->cfetch->count_encode_0001_repeats++;
             bdi_size = 8; // 1 segment, 8 bytes
           break;
           case 2:
             //base 8 delta 1
-            cp->count_encode_0010_b8d1++;
+            cp->cfetch->count_encode_0010_b8d1++;
             bdi_size = 16; // 2 segments, 16 bytes
           break;
           case 3:
             //base 8 delta 2
-            cp->count_encode_0011_b8d2++;
+            cp->cfetch->count_encode_0011_b8d2++;
             bdi_size = 24; // 3 segments, 24 bytes
           break;
           case 4:
             //base 8 delta 4
-            cp->count_encode_0100_b8d4++;
+            cp->cfetch->count_encode_0100_b8d4++;
             bdi_size = 40; // 5 segments, 40 bytes
           break;
           case 5:
             //base 4 delta 1
-            cp->count_encode_0101_b4d1++;
+            cp->cfetch->count_encode_0101_b4d1++;
             bdi_size = 24; // 3 segments, 24 bytes
           break;
           case 6:
             //base 4 delta 2
-            cp->count_encode_0110_b4d2++;
+            cp->cfetch->count_encode_0110_b4d2++;
             bdi_size = 40; // 5 segments, 40 bytes
           break;
           case 7:
             //base 2 delta 1
-            cp->count_encode_0111_b2d1++;
+            cp->cfetch->count_encode_0111_b2d1++;
             bdi_size = 40; // 5 segments, 40 bytes
           break;
           case 15:
             //decompressed
-            cp->count_encode_1111_uncompressed++;
+            cp->cfetch->count_encode_1111_uncompressed++;
             bdi_size = 64; // 8 segments, 64 bytes
           break;
         }
 
-    cp->size_uncompressed += 64;
-    cp->size_compressed += bdi_size;
+    cp->cfetch->size_uncompressed += 64;
+    cp->cfetch->size_compressed += bdi_size;
 
       struct cache_blk_t *bdi_blk1, *bdi_blk2;
 
@@ -375,32 +388,32 @@ void rcp_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md
 
   // Static energy is updated every cache access, regardless of operation and hit result  
 
-  cp->sim_tag_static_power += (now - cp->last_cache_access) * cp->cacti_tag_static_power;
-  cp->sim_data_static_power += (now - cp->last_cache_access) * cp->cacti_data_static_power;
+  cp->cfetch->sim_tag_static_power += (now - cp->cfetch->last_cache_access) * cp->cfetch->cacti_tag_static_power;
+  cp->cfetch->sim_data_static_power += (now - cp->cfetch->last_cache_access) * cp->cfetch->cacti_data_static_power;
 
   // On cache miss, tag read will occur for read and write operation
 
-  cp->sim_tag_read_dynamic_energy += cp->cacti_tag_read_dynamic_energy;
+  cp->cfetch->sim_tag_read_dynamic_energy += cp->cfetch->cacti_tag_read_dynamic_energy;
 
   // On cache miss, read operation, there will be 1 tag write, 1 data write, 0 data read
 
   if (cmd == Read) {
-                     cp->sim_tag_write_dynamic_energy += cp->cacti_tag_write_dynamic_energy;
-                     cp->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_write_dynamic_energy;
+                     cp->cfetch->sim_tag_write_dynamic_energy += cp->cfetch->cacti_tag_write_dynamic_energy;
+                     cp->cfetch->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cfetch->cacti_data_write_dynamic_energy;
                    }
 
   // On cache miss, write operation, there will be 1 tag write (plus a dirty bit write), 1 data write, 0 data reads
 
   if (cmd == Write) {
-                      cp->sim_tag_write_dynamic_energy += cp->cacti_tag_write_dynamic_energy;
-                      cp->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_write_dynamic_energy;
+                      cp->cfetch->sim_tag_write_dynamic_energy += cp->cfetch->cacti_tag_write_dynamic_energy;
+                      cp->cfetch->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cfetch->cacti_data_write_dynamic_energy;
   
                     }
 
-  cp->last_cache_access = now;
+  cp->cfetch->last_cache_access = now;
 
   char vcdbuf1[32];
-  sprintf(vcdbuf1, "#%llu", (unsigned long long) (1000/cp->compressor_frequency)*now);
+  sprintf(vcdbuf1, "#%llu", (unsigned long long) (1000/cp->cfetch->compressor_frequency)*now);
 
   char vcdbuf2[516];
   vcdbuf2[0] = 'b';
@@ -416,8 +429,8 @@ void rcp_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md
 
   if ( strcmp(last_vcdbuf2,vcdbuf2) ) {
 
-  if  ( cp->cVCDname[0] != '\0' && cp->bdi_compress) {
-  fp = fopen(cp->cVCDname, "a");
+  if  ( cp->cfetch->cVCDname[0] != '\0' && cp->cfetch->bdi_compress) {
+  fp = fopen(cp->cfetch->cVCDname, "a");
   fprintf(fp, vcdbuf1);
   fprintf(fp, "\n");
   fprintf(fp, vcdbuf2);
@@ -445,7 +458,7 @@ else
 
 //
 
-int rcp_cache_hit (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_addr_t addr, tick_t now, struct cache_blk_t *blk) {
+int cfetch_cache_hit (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_addr_t addr, tick_t now, struct cache_blk_t *blk) {
 
   signed long long db[64], db8[64];
   signed long db4[64];
@@ -459,7 +472,7 @@ int rcp_cache_hit (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_a
   md_addr_t set = CACHE_SET(cp, addr);
   md_addr_t bofs = CACHE_BLK(cp, addr);
 
-//TODO only do this on read, not write hit
+//TODO only do this on read, not write hit, what to do on write?
 
 if (mem != NULL)
     {
@@ -722,7 +735,7 @@ if (bdi_size != 64) {
   // blk->ready = now + cp->hit_latency + cp->decompression_latency;
 
   char dvcdbuf1[32];
-  sprintf(dvcdbuf1, "#%llu", (unsigned long long) (1000/cp->compressor_frequency)*now);
+  sprintf(dvcdbuf1, "#%llu", (unsigned long long) (1000/cp->cfetch->compressor_frequency)*now);
 
   //db[0-63].. is the cache line being read from memory / written into cache / compressed
   
@@ -753,8 +766,8 @@ if (bdi_size != 64) {
 
   if (strcmp(last_dvcdbuf2,dvcdbuf2) || strcmp(last_dvcdbuf3,dvcdbuf3)) {
 
-  if  ( cp->dVCDname[0] != '\0' ) {
-  fp = fopen(cp->dVCDname, "a");
+  if  ( cp->cfetch->dVCDname[0] != '\0' ) {
+  fp = fopen(cp->cfetch->dVCDname, "a");
   fprintf(fp, dvcdbuf1);
   fprintf(fp, "\n");
   fprintf(fp, dvcdbuf2);
@@ -772,38 +785,38 @@ if (bdi_size != 64) {
 }
   // Static energy is updated every cache access, regardless of operation and hit result  
 
-  cp->sim_tag_static_power += (now - cp->last_cache_access) * cp->cacti_tag_static_power;
-  cp->sim_data_static_power += (now - cp->last_cache_access) * cp->cacti_data_static_power;
+  cp->cfetch->sim_tag_static_power += (now - cp->cfetch->last_cache_access) * cp->cfetch->cacti_tag_static_power;
+  cp->cfetch->sim_data_static_power += (now - cp->cfetch->last_cache_access) * cp->cfetch->cacti_data_static_power;
 
   // On cache hit, tag read will occur for read and write operation
 
-  cp->sim_tag_read_dynamic_energy += cp->cacti_tag_read_dynamic_energy;
+  cp->cfetch->sim_tag_read_dynamic_energy += cp->cfetch->cacti_tag_read_dynamic_energy;
 
   // On cache hit, read operation, there will be 0 tag writes, 0 data writes, 1 data read
 
   if (cmd == Read) { 
 
-    cp->sim_data_read_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_read_dynamic_energy;
+    cp->cfetch->sim_data_read_dynamic_energy += (double) bdi_size / cp->bsize * cp->cfetch->cacti_data_read_dynamic_energy;
 
   }
 
   // On cache hit, write operation, there will be 0 tag writes, 1 data write, 0 data reads
 
   if (cmd == Write) {
-                      cp->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_write_dynamic_energy;
+                      cp->cfetch->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cfetch->cacti_data_write_dynamic_energy;
                     }
 
-  cp->last_cache_access = now;
+  cp->cfetch->last_cache_access = now;
 
 
 
 
 
 
-if (cmd == Read && cp->bdi_compress && bdi_size != 64) { 
-    cp->compressed_hits++;
-    cp->last_compressed_size = bdi_size;
-    return cp->hit_latency + cp->decompression_latency;
+if (cmd == Read && cp->cfetch->bdi_compress && bdi_size != 64) { 
+    cp->cfetch->compressed_hits++;
+    cp->cfetch->last_compressed_size = bdi_size;
+    return cp->hit_latency + cp->cfetch->decompression_latency;
   }
   else {
     return cp->hit_latency;
@@ -817,52 +830,57 @@ if (cmd == Read && cp->bdi_compress && bdi_size != 64) {
 
 
 
-void rcp_init_cache (struct cache_t *cp) {
+struct cfetch_io *cfetch_init_cache (struct cache_t *cp) {
 
-cp->bdi_check = 0;
-cp->bdi_compress = 0;
-cp->write_vcd = 0;
+struct cfetch_io *cf;
+cf = (struct cfetch_io *) malloc ( sizeof (struct cfetch_io) );
 
-cp->sim_tag_static_power = 0;
-cp->sim_tag_read_dynamic_energy = 0;
-cp->sim_tag_write_dynamic_energy = 0;
-cp->sim_data_static_power = 0;
-cp->sim_data_read_dynamic_energy = 0;
-cp->sim_data_write_dynamic_energy = 0;
-cp->last_cache_access = 0;
+cf->bdi_check = 0;
+cf->bdi_compress = 0;
+cf->write_vcd = 0;
 
-cp->compressed_hits = 0;
-cp->last_compressed_size = 64;
+cf->sim_tag_static_power = 0;
+cf->sim_tag_read_dynamic_energy = 0;
+cf->sim_tag_write_dynamic_energy = 0;
+cf->sim_data_static_power = 0;
+cf->sim_data_read_dynamic_energy = 0;
+cf->sim_data_write_dynamic_energy = 0;
+cf->last_cache_access = 0;
 
-cp->count_check_lines = 0;
-cp->count_compressible_any = 0;
+cf->compressed_hits = 0;
+cf->last_compressed_size = 64;
 
-cp->count_encode_lines = 0;
-cp->count_encode_0000_zeros = 0;
-cp->count_encode_0001_repeats = 0;
-cp->count_encode_0010_b8d1 = 0;
-cp->count_encode_0011_b8d2 = 0;
-cp->count_encode_0100_b8d4 = 0;
-cp->count_encode_0101_b4d1 = 0;
-cp->count_encode_0110_b4d2 = 0;
-cp->count_encode_0111_b2d1 = 0;
-cp->count_encode_1111_uncompressed = 0;
+cf->count_check_lines = 0;
+cf->count_compressible_any = 0;
 
-cp->size_uncompressed = 0;
-cp->size_compressed = 0;
+cf->count_encode_lines = 0;
+cf->count_encode_0000_zeros = 0;
+cf->count_encode_0001_repeats = 0;
+cf->count_encode_0010_b8d1 = 0;
+cf->count_encode_0011_b8d2 = 0;
+cf->count_encode_0100_b8d4 = 0;
+cf->count_encode_0101_b4d1 = 0;
+cf->count_encode_0110_b4d2 = 0;
+cf->count_encode_0111_b2d1 = 0;
+cf->count_encode_1111_uncompressed = 0;
 
-strcpy(cp->cVCDname, "");
-strcpy(cp->dVCDname, "");
+cf->size_uncompressed = 0;
+cf->size_compressed = 0;
+
+strcpy(cf->cVCDname, "");
+strcpy(cf->dVCDname, "");
+
+return cf;
 
 }
 
-void rcp_init_blk (struct cache_blk_t *blk) {
+void cfetch_init_blk (struct cache_blk_t *blk) {
 	blk->bdi_encode = (byte_t) -1;
 	blk->bdi_mask = (sword_t) -1;
 
 }
 
-void rcp_update_blk (struct cache_blk_t *blk, byte_t bdi_encode, qword_t bdi_mask) {
+void cfetch_update_blk (struct cache_blk_t *blk, byte_t bdi_encode, qword_t bdi_mask) {
 	blk->bdi_encode = (byte_t) bdi_encode;
         blk->bdi_mask = (sword_t) bdi_mask;
 }
