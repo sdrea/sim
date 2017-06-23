@@ -1,12 +1,14 @@
-// Variant of SimpleScalar developed for modelling cache compression and prefetching
-// Based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
-//
-// changes wrapped in //sdrea-begin ... //sdrea-end
-//
-// Sean Rea
-// sdrea@lakeheadu.ca
-// 2016-2017
-////////////////////////////////////////////////////////////////
+/* 
+ * variant of SimpleScalar developed for modelling cache compression and prefetching
+ * based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
+ * changes wrapped in //sdrea-begin ... //sdrea-end
+ * or marked with //sdrea
+ *
+ * Sean Rea
+ * sdrea@lakeheadu.ca
+ * 2016-2017
+ */
+
 
 /*------------------------------------------------------------
  *  Copyright 1994 Digital Equipment Corporation and Steve Wilton
@@ -112,10 +114,9 @@
  * The following scale factor can be used to scale between technologies.
  * To convert from 0.8um to 0.5um, make FUDGEFACTOR = 1.6
  */
-//begin-sdrea
-//#define FUDGEFACTOR 1.0
-#define FUDGEFACTOR 1.1111
-//end-sdrea
+
+#define FUDGEFACTOR 1.1111 //sdrea
+
 
 /*===================================================================*/
 
@@ -125,10 +126,7 @@
  */
 
 #define GEN_POWER_FACTOR 1.31
-//begin-sdrea
-//#define TECH_POINT35
-#define TECH_POINT10
-//end-sdrea
+#define TECH_POINT10 //sdrea
 #if defined(TECH_POINT10)
 #define CSCALE		(84.2172)	/* wire capacitance scaling factor */
 			/* linear: 51.7172, predicted: 84.2172 */
@@ -276,10 +274,8 @@
 
 /* other stuff (from tech report, appendix 1) */
 
-//begin-sdrea
-//#define Mhz             600e6
-#define Mhz             3000e6
-//end-sdrea
+#define Mhz             3000e6 //sdrea
+
 #define Period          (1/Mhz)
 
 #define krise		(0.4e-9 * LSCALE)
