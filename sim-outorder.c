@@ -93,8 +93,8 @@
 #include <time.h>
 #include <string.h>
 
-counter_t tmp_misses_il1;
-counter_t tmp_misses_dl1;
+static counter_t debuff_eject_unread;
+static counter_t debuff_eject_read;
 
 static int il1_bdi_compress;
 static int il1_bdi_check;
@@ -157,6 +157,8 @@ counter_t pf_no_correct;
 static int PREFETCH_TABLE_TYPE;
 static int PREFETCH_TABLE_SETS;
 static int PREFETCH_TABLE_ASSOC;
+static int PREFETCH_TABLE_DELAY;
+static int DECOMPRESSION_LATENCY;
 
 static double pf_cacti_tag_static_power;
 static double pf_cacti_tag_read_dynamic_energy;
@@ -165,7 +167,7 @@ static double pf_cacti_data_static_power;
 static double pf_cacti_data_read_dynamic_energy;
 static double pf_cacti_data_write_dynamic_energy;
 
-static int pf_buf_lat;
+static int DECOMPRESSION_BUFFER_LATENCY;
 static double pf_cacti_buf_static_power;
 static double pf_cacti_buf_read_dynamic_energy;
 static double pf_cacti_buf_write_dynamic_energy;
@@ -474,6 +476,10 @@ void cp_options (struct opt_odb_t *odb) {
 	      &PREFETCH_TABLE_ASSOC, /* default */1,
 	      /* print */TRUE, /* format */NULL);
 
+ opt_reg_int(odb, "-prefetch_table_delay", "Delay to read address from prefetch table",
+	      &PREFETCH_TABLE_DELAY, /* default */1,
+	      /* print */TRUE, /* format */NULL);
+
  opt_reg_double(odb, "-pf:tag:static-power",
                 "pf tag leakage power (static power) (mW)",
                 &pf_cacti_tag_static_power, 0, TRUE, NULL);
@@ -499,7 +505,11 @@ void cp_options (struct opt_odb_t *odb) {
                 &pf_cacti_data_write_dynamic_energy, 0, TRUE, NULL);
 
  opt_reg_int(odb, "-pf:buf:lat", "Prefetch Buffer Latency",
-	      &pf_buf_lat, /* default */1,
+	      &DECOMPRESSION_BUFFER_LATENCY, /* default */1,
+	      /* print */TRUE, /* format */NULL);
+
+ opt_reg_int(odb, "-pf:decomp:lat", "Decompression Latency",
+	      &DECOMPRESSION_LATENCY, /* default */0,
 	      /* print */TRUE, /* format */NULL);
 
   opt_reg_double(odb, "-pf:buf:static-power",
@@ -581,6 +591,13 @@ void cp_stats (struct stat_sdb_t *sdb) {
                "PFTable Cache buf Dynamic Write Energy (nJ)", 
 	&pf_sim_buf_write_dynamic_energy, 0, "%21.6f");
 
+  stat_reg_int(sdb, "debuff_eject_unread",
+	       "Unread decompression buffer entries tossed out",
+	       &debuff_eject_unread, debuff_eject_unread, "%32d");
+
+  stat_reg_int(sdb, "debuff_eject_read",
+	       "Read decompression buffer entries tossed out",
+	       &debuff_eject_read, debuff_eject_read, "%32d");
 
 }
 
@@ -733,6 +750,125 @@ struct pf_stride_table* pf_stride_table_init()
     return table;
 
 }
+
+struct debuff_queue_node
+{
+  struct debuff_queue_node *prev;
+  struct debuff_queue_node *next;
+  md_addr_t addr;
+  tick_t rdy;
+  int state;
+};
+
+struct debuff_queue
+{
+  struct debuff_queue_node *head;
+  struct debuff_queue_node *tail;
+  struct debuff_queue_node *nodes;
+};
+
+void debuff_queue_initial(struct debuff_queue* in, int size)
+{
+  int i;
+  struct debuff_queue_node *tmp;
+
+  if (size == 0) fatal ("Decompression buffer must be greater than zero");
+
+  in->nodes = (struct debuff_queue_node *) malloc (size * sizeof(struct debuff_queue_node) );
+
+  if (size == 1) {
+
+    in->head = &in->nodes[0];
+    in->tail = &in->nodes[0];
+    tmp = &in->nodes[0];
+    tmp->prev = NULL;
+    tmp->next = NULL;
+    tmp->addr = 0;
+    tmp->rdy = 0;
+    tmp->state = 0;
+  }
+  
+  if (size > 1) {
+
+    // Head
+    in->head = &in->nodes[0];
+    tmp = &in->nodes[0];
+    tmp->prev = NULL;
+    tmp->next = &in->nodes[1];
+    tmp->addr = 0;
+    tmp->rdy = 0;
+    tmp->state = 0;
+
+    // Tail
+    in->tail = &in->nodes[size-1];
+    tmp = &in->nodes[size-1];
+    tmp->prev = &in->nodes[size-2];
+    tmp->next = NULL;
+    tmp->addr = 0;
+    tmp->rdy = 0;
+    tmp->state = 0;
+ 
+    for (i = 1; i<size-1; i++) {
+
+      tmp = &in->nodes[i];
+      tmp->prev = &in->nodes[i-1];
+      tmp->next = &in->nodes[i+1];
+    tmp->addr = 0;
+    tmp->rdy = 0;
+    tmp->state = 0;
+
+    }
+
+  }
+
+}
+
+void cp_debuff_queue_addNode (struct cache_t *cp, struct debuff_queue* in, md_addr_t addr_in, tick_t cycle_in) {
+
+  struct debuff_queue_node *tmp;
+  tmp = in->head;
+
+  if (tmp->addr) 
+    {
+      // count ejections from table
+      if (tmp->state == 0) debuff_eject_unread++;
+      if (tmp->state == 1) debuff_eject_read++;
+    }
+
+  if (tmp->next == NULL) 
+    {
+      // One entry table
+      tmp->addr = addr_in;
+      tmp->rdy = cycle_in + PREFETCH_TABLE_DELAY + cp->hit_latency + DECOMPRESSION_LATENCY;
+    }
+  else 
+    {
+      // Many entry table
+      tmp->addr = addr_in;
+      tmp->rdy = cycle_in + PREFETCH_TABLE_DELAY + cp->hit_latency + DECOMPRESSION_LATENCY;
+      in->head = tmp->next;
+      in->head->prev = NULL;
+      tmp->prev = in->tail;
+      tmp->next = NULL;
+      in->tail->next = tmp;
+      in->tail = tmp;
+    }
+
+  //power
+  pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
+  pf_sim_buf_static_power = cycle_in * pf_cacti_buf_static_power;
+}
+
+struct debuff_queue dc_buffer; 
+
+
+
+
+
+
+
+
+
 
 struct delay_ready_queue_node
 {
@@ -896,6 +1032,138 @@ else if ( !strcmp(cp->name, "dl2") )
       cp->decompression_latency = dl2_decompression_latency;
       cp->compressor_frequency = compressor_frequency;
   }
+
+}
+
+md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
+
+md_addr_t addr = NULL;
+
+if (PREFETCH_TABLE_TYPE == 1)
+  {
+
+    struct pf_last_blk *blk;
+    int set = pc & last->nsets-1;
+
+    for (blk=last->sets[set].way_head; blk; blk=blk->way_next)
+      {
+        if ( blk->tag == (pc & ~(last->nsets-1)) ) addr = blk->addr;
+        break;
+      }
+
+  //prefetch table power
+  pf_sim_tag_static_power = sim_cycle_in * pf_cacti_tag_static_power;
+  pf_sim_data_static_power = sim_cycle_in * pf_cacti_data_static_power;
+  pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
+  if (addr) pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
+
+  }
+
+return addr;
+
+}
+
+
+int cp_prefetch(md_addr_t pc, md_addr_t addr, tick_t cycle, int cmiss, int chit ) {
+    
+  struct debuff_queue *tmp;
+  struct debuff_queue_node *node;
+  tmp = &dc_buffer;
+  int hit = 0, lat = 0;
+  int decomp_remaining = 0;
+
+  if (PREFETCH_TABLE_TYPE == 0)
+    {
+      // NO PREFETCHING
+    }
+
+  if (PREFETCH_TABLE_TYPE == 1) 
+    {
+
+      // LAST OUTCOME (LO)
+
+      struct pf_last_blk *blk;
+      int set = pc & last->nsets-1;
+
+      for (node=tmp->head; node; node=node->next) {
+
+        if ( (node->addr) == (addr) && node->state == 0) {
+          node->state = 1;
+          hit = 1;
+          decomp_remaining = cycle > node->rdy ? 0 : node->rdy - cycle;
+          break;
+        }
+      }
+
+      if (hit) 
+        {
+          // Decompression buffer hit
+          lat = DECOMPRESSION_BUFFER_LATENCY + decomp_remaining;
+          if (cmiss) fatal ("Hit decompression buffer but missed cache");
+
+         //power
+         pf_sim_buf_static_power = cycle * pf_cacti_buf_static_power;
+         pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
+        }
+
+      // Update prefetch table if compressed hit
+      if (chit) 
+        {
+
+          blk=last->sets[set].way_tail;
+          blk->tag = pc & ~(last->nsets-1);
+          blk->addr = addr;
+
+          if (last->assoc > 1) 
+            {
+              blk->way_next = last->sets[set].way_head;
+              last->sets[set].way_tail = blk->way_prev;
+              blk->way_prev->way_next = NULL;
+              blk->way_prev = NULL;
+              last->sets[set].way_head = blk;
+              blk=blk->way_next;
+              blk->way_prev = last->sets[set].way_head;
+            }
+        }
+    }
+
+  if (PREFETCH_TABLE_TYPE == 2) 
+    {
+
+      // STRIDE (S)
+
+      
+
+    }
+
+  if (PREFETCH_TABLE_TYPE == 3) 
+    {
+
+      // TWO LEVEL (2L)
+
+      
+
+    }
+
+  if (PREFETCH_TABLE_TYPE == 4) 
+    {
+
+      // HYBRID S/LO
+
+      
+
+    }
+
+  if (PREFETCH_TABLE_TYPE == 5) 
+    {
+
+      // HYBRID 2L/S
+
+      
+
+    }
+
+return lat;
 
 }
 
@@ -3133,8 +3401,7 @@ ruu_commit(void)
 //
 //		      if (lat > cache_dl1_lat)
 //			events |= PEV_CACHEMISS;
-
-		      tmp_misses_dl1 = cache_dl1->misses;
+                      tick_t tmp_misses_dl1 = cache_dl1->misses;
 		      lat = cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3), NULL, 4, sim_cycle, NULL, NULL, mem);
 		      if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
 
@@ -3802,6 +4069,8 @@ ruu_issue(void)
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
+// check decompression ready queue here
+
 //				  load_lat =
 //				    cache_access(cache_dl1, Read,
 //						 (rs->addr & ~3), NULL, 4,
@@ -3810,307 +4079,18 @@ ruu_issue(void)
 //				  if (load_lat > cache_dl1_lat)
 //				    events |= PEV_CACHEMISS;
 
- 				  tick_t tmp_comp_hits = cache_dl1->compressed_hits;
-				  tmp_misses_dl1 = cache_dl1->misses;
+ 				 tick_t tmp_comp_hits = cache_dl1->compressed_hits;
+				 tick_t tmp_misses_dl1 = cache_dl1->misses;
 
-				      if (PREFETCH_TABLE_TYPE == 0)
-                                      {
-				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
-				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
-				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
-				          {
-				            count_comp_hits++;
-				          }
-			              }
-                                      if (PREFETCH_TABLE_TYPE == 1)
-                                      {
+                                 load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
 
-				        struct pf_last_blk *blk;
-                                        int pred_good = 0;
-				        int set = rs->PC & last->nsets-1;
+                                 int cmiss = cache_dl1->misses > tmp_misses_dl1 ? 1 : 0;
+                                 int chit = cache_dl1->compressed_hits > tmp_comp_hits ? 1 : 0;
 
-				        for (blk=last->sets[set].way_head;
-					     blk;
-					     blk=blk->way_next)
-					{
-					  if ( blk->tag == (rs->PC & ~(last->nsets-1))  &&
-					     ( blk->addr & ~63 ) == ( rs->addr & ~63 ) ) 
-					     pred_good = 1;
-					}
-				        if (pred_good) 
-					{
-					  pf_last_correct++;
-					  //load_lat = cache_dl1->hit_latency;
-					  load_lat = pf_buf_lat;
+                                 if (cmiss) events |= PEV_CACHEMISS;
 
-					    for (blk=last->sets[set].way_head;
-					         blk;
-					         blk=blk->way_next)
-					    {
-					      if (blk->tag == (rs->PC & ~(last->nsets-1)) )
-					      {
-					        break;
-					      }
-					    }
-
-					  // Prefetch table is 4 byte data (addr) and tag is 32 bits
-
-					  // Prefetch table was a hit
-						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
-						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
-                                          // Prefetch table TAG READ
-						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
-                                          // Prefetch table DATA(ADDR) READ
-						pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
-					  // L1 compressed read
-						cache_dl1->sim_tag_read_dynamic_energy += cache_dl1->cacti_tag_read_dynamic_energy;
-						cache_dl1->sim_data_read_dynamic_energy += (double) blk->compressed_data_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
-						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
-						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
-						cache_dl1->last_cache_access = sim_cycle;
-					  // Plus I wrote to the prefetch buffer register containing the decompressed line, then read it, and calc static
-					 	pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
-					 	pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
-						pf_sim_buf_static_power = sim_cycle * pf_cacti_buf_static_power;
-					}
-				        else
-				        {
-				          pf_no_correct++;
-				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
-				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
-				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
-				          {
-				            count_comp_hits++;
-				            pf_table_writes++;
-
-					    blk=last->sets[set].way_tail;
-				            blk->tag = rs->PC & ~(last->nsets-1);
-				            blk->addr = rs->addr;
-					    blk->compressed_data_size = cache_dl1->last_compressed_size;
-					    if (last->assoc > 1) {
-					      blk->way_next = last->sets[set].way_head;
-					      last->sets[set].way_tail = blk->way_prev;
-					      blk->way_prev->way_next = NULL;
-					      blk->way_prev = NULL;
-					      last->sets[set].way_head = blk;
-                                              blk=blk->way_next;
-                                              blk->way_prev = last->sets[set].way_head;
-                                            }
-                                          }
-
-					  // Prefetch table is 4 byte data (addr) and tag is 32 bits
-
-					  // Prefetch table was a miss
-						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
-						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
-                                          // Prefetch table TAG READ
-						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
-                                          // Prefetch table TAG WRITE
-						pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
-					  // Prefetch table DATA(ADDR) WRITE
-						pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
-
-				        }
-                                      }
-				      if (PREFETCH_TABLE_TYPE == 2)
-                                      {
-
-				        struct pf_stride_blk *blk;
-                                        int last_pred_good = 0;
-                                        int stride_pred_good = 0;
-				        int set = rs->PC & stride->nsets-1;
-					int tag = rs->PC & ~(stride->nsets-1);
-
-				        for (blk=stride->sets[set].way_head;
-					     blk;
-					     blk=blk->way_next)
-					{
-					  if ( blk->tag == (rs->PC & ~(stride->nsets-1)) && ( (blk->addr + blk->stride) & ~63 ) == ( rs->addr & ~63 ) && blk->state > 1)
-						stride_pred_good = 1;
-					  if ( blk->tag == (rs->PC & ~(stride->nsets-1)) && ( (blk->addr) & ~63 ) == ( rs->addr & ~63 ) && blk->state < 2)
-					        last_pred_good = 1;
-
-			
-
-						 
-					}
-				        if (stride_pred_good) // good prediction
-					{
-					  pf_stride_correct++;
-					  //load_lat = cache_dl1->hit_latency;
-					  load_lat = pf_buf_lat;
-
-					    for (blk=stride->sets[set].way_head;
-					         blk;
-					         blk=blk->way_next)
-					    {
-					      if (blk->tag == tag) 
-					      {
-					        break;
-					      }
-					    }
-
-					  blk->addr = rs->addr;
-
-					  // Prefetch table is 4 byte data (addr) and tag is 32 bits + 2 bit state + 16 bit stride = 50 bits?
-
-					  // Prefetch table was a hit
-						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
-						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
-                                          // Prefetch table TAG READ
-						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
-                                          // Prefetch table DATA(ADDR) READ
-						pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
-					  // Prefetch table DATA(ADDR) WRITE
-						pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
-					  // L1 compressed read
-						cache_dl1->sim_tag_read_dynamic_energy += cache_dl1->cacti_tag_read_dynamic_energy;
-						cache_dl1->sim_data_read_dynamic_energy += (double) cache_dl1->last_compressed_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
-						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
-						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
-						cache_dl1->last_cache_access = sim_cycle;
-					  // Plus I wrote to the prefetch buffer register containing the decompressed line, then read it, and calc static
-					 	pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
-					 	pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
-						pf_sim_buf_static_power = sim_cycle * pf_cacti_buf_static_power;					  
-
-
-					}
-				        else if (last_pred_good) // good prediction
-					{
-					  pf_last_correct++;
-					  //load_lat = cache_dl1->hit_latency;
-					  load_lat = pf_buf_lat;
-
-					    for (blk=stride->sets[set].way_head;
-					         blk;
-					         blk=blk->way_next)
-					    {
-					      if (blk->tag == tag) 
-					      {
-					        break;
-					      }
-					    }
-
-					    if (blk->state == 0) {
-						blk->stride = rs->addr - blk->addr;
-						blk->addr = rs->addr;
-						blk->state = 1;
-					    }
-					    else if (blk->state == 1) {
-						if (rs->addr - blk->addr == blk->stride) {
-						blk->addr = rs->addr;
-						blk->state = 2;
-						}
-						else {
-						blk->stride = rs->addr - blk->addr;
-						blk->addr = rs->addr;
-						blk->state = 1;
-						}
-					  }
-				
-					  // Prefetch table was a hit
-						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
-						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
-                                          // Prefetch table TAG READ
-						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
-					  // Prefetch table TAG WRITE
-						pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
-                                          // Prefetch table DATA(ADDR) READ
-						pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
-					  // L1 compressed read
-					  	cache_dl1->sim_tag_read_dynamic_energy += cache_dl1->cacti_tag_read_dynamic_energy;
-						cache_dl1->sim_data_read_dynamic_energy += (double) blk->compressed_data_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
-						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
-						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
-						cache_dl1->last_cache_access = sim_cycle;
-					  // Plus I wrote to the prefetch buffer register containing the decompressed line, then read it, and calc static
-					 	pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
-					 	pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
-						pf_sim_buf_static_power = sim_cycle * pf_cacti_buf_static_power;
-
-
-					}
-				        else // no prediction, update table with new stride and new
-				        {
-					  pf_no_correct++;
-				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
-
-					  // Prefetch table is 4 byte data (addr) and tag is 50 bits
-
-					  // Prefetch table was a miss
-						pf_sim_tag_static_power = sim_cycle * pf_cacti_tag_static_power;
-						pf_sim_data_static_power = sim_cycle * pf_cacti_data_static_power;
-                                          // Prefetch table TAG READ
-						pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
-					  // Prefetch table TAG WRITE
-						pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
-					  // Prefetch table DATA(ADDR) WRITE
-						pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
-
-
-				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
-				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
-				          {
-					    
-				            count_comp_hits++;
-				            pf_table_writes++;
-
-					    for (blk=stride->sets[set].way_head;
-					         blk;
-					         blk=blk->way_next)
-					    {
-					      if (blk->tag == tag) 
-					      {
-					        break;
-					      }
-					    }
-
-					    if (!blk) 
-					    {
-					      blk=stride->sets[set].way_tail;
-
-						blk->tag = rs->PC & ~(stride->nsets-1);
-						blk->addr = rs->addr;
-						blk->stride = 0;
-						blk->state = 0;
-						blk->compressed_data_size = cache_dl1->last_compressed_size;
-
-					      if (stride->assoc > 1) {
-					        blk->way_next = stride->sets[set].way_head;
-					        stride->sets[set].way_tail = blk->way_prev;
-					        blk->way_prev->way_next = NULL;
-					        blk->way_prev = NULL;
-					        stride->sets[set].way_head = blk;
-                                                blk=blk->way_next;
-                                                blk->way_prev = stride->sets[set].way_head;
-                                              }
-					    }
-					    else //FIXME: should move to head after update
-					    {
-
-					    if (blk->state == 0) {
-						blk->stride = rs->addr - blk->addr;
-						blk->addr = rs->addr;
-						blk->state = 1;
-					    }
-					    else if (blk->state > 0) {
-						if (rs->addr - blk->addr == blk->stride) {
-						blk->addr = rs->addr;
-						blk->state = 2;
-						}
-						else {
-						blk->stride = rs->addr - blk->addr;
-						blk->addr = rs->addr;
-						blk->state = 1;
-						}
-
-					    }
-					    }
-					  }
-				        }
-                                      }
-
+                                 load_lat += cp_prefetch(rs->PC, rs->addr, sim_cycle, cmiss, chit);
+			                                       
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -5242,57 +5222,7 @@ struct RUU_station *tmp_rs;
 	  break;
 	}
 
-//sdrea-begin
-////////////////////////////////////////////////////////////////
-
-      if(fetch_data[fetch_head].fetch_delay > sim_cycle) break;
-
-  if (PREFETCH_TABLE_TYPE == 1)
-  {
-
-    struct pf_last_blk *blk;
-    int set = fetch_data[fetch_head].regs_PC & last->nsets-1;
-    int tag = fetch_data[fetch_head].regs_PC & ~(last->nsets-1);
-    int hitt = 0;
-
-    pf_table_reads++;
-
-    for (blk=last->sets[set].way_head;
-         blk;
-         blk=blk->way_next)
-    {
-      if (blk->tag == tag) hitt = 1;
-    }
-
-    if ( hitt )   pf_table_hits++;
-
-
-  }
-  if (PREFETCH_TABLE_TYPE == 2)
-  {
-
-    struct pf_stride_blk *blk;
-    int set = fetch_data[fetch_head].regs_PC & stride->nsets-1;
-    int tag = fetch_data[fetch_head].regs_PC & ~(stride->nsets-1);
-    int hitt = 0;
-
-    pf_table_reads++;
-
-    for (blk=stride->sets[set].way_head;
-         blk;
-         blk=blk->way_next)
-    {
-      if (blk->tag == tag) hitt = 1;
-    
-    }
-
-    if ( hitt )   pf_table_hits++;
-
-
-  }
-
-////////////////////////////////////////////////////////////////
-//sdrea-end
+      if(fetch_data[fetch_head].fetch_delay > sim_cycle) break; //sdrea
 
       /* get the next instruction from the IFETCH -> DISPATCH queue */
       inst = fetch_data[fetch_head].IR;
@@ -5304,6 +5234,10 @@ struct RUU_station *tmp_rs;
 
       /* decode the inst */
       MD_SET_OPCODE(op, inst);
+
+      md_addr_t cp_addr = NULL; //sdrea
+      if ( ( MD_OP_FLAGS(op) & (F_MEM|F_LOAD) ) == (F_MEM|F_LOAD) ) cp_addr = cp_table_check(regs.regs_PC, sim_cycle); //sdrea
+      if ( cp_addr ) cp_debuff_queue_addNode ( cache_dl1, &dc_buffer, cp_addr, sim_cycle ); //sdrea
 
       /* compute default next PC */
       regs.regs_NPC = regs.regs_PC + sizeof(md_inst_t);
@@ -5962,6 +5896,8 @@ ruu_fetch(void)
 
 	  /* address is within program text, read instruction from memory */
 	  lat = cache_il1_lat;
+
+        tick_t tmp_misses_il1 = cache_il1->misses; //sdrea
 	  if (cache_il1)
 	    {
 	      /* access the I-cache */
@@ -5977,7 +5913,7 @@ ruu_fetch(void)
 //	      if (lat > cache_il1_lat)
 //		last_inst_missed = TRUE;
 
-	      tmp_misses_il1 = cache_il1->misses;
+	      
 	      lat = cache_access(cache_il1, Read, IACOMPRESS(fetch_regs_PC), NULL, ISCOMPRESS(sizeof(md_inst_t)), sim_cycle, NULL, NULL, NULL);
 	      if (cache_il1->misses > tmp_misses_il1) last_inst_missed = TRUE;
 
@@ -6234,6 +6170,7 @@ sim_main(void)
 ////////////////////////////////////////////////////////////////
 
 delay_ready_queue_initial(&delay_ready_queue);
+debuff_queue_initial(&dc_buffer, 8);
 
 count_comp_hits = 0;
 pf_table_writes = 0;
