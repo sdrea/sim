@@ -107,8 +107,15 @@
 /* highly associative caches are implemented using a hash table lookup to
    speed block access, this macro decides if a cache is "highly associative" */
 
+//sdrea-begin
+////////////////////////////////////////////////////////////////
 
-#define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 4) 
+//#define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 4)
+
+#define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 32)
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
 /* cache replacement policy */
 enum cache_policy {
@@ -226,7 +233,6 @@ struct cache_t
 
   int bdi_compress;
   int bdi_check;
-  int write_vcd;
 
   double cacti_tag_static_power;
   double cacti_tag_read_dynamic_energy;
@@ -250,26 +256,6 @@ struct cache_t
 
   tick_t compressed_hits;
   int last_compressed_size;
-
-  counter_t count_check_lines;
-  counter_t count_compressible_any;
-
-  counter_t count_encode_lines;
-  counter_t count_encode_0000_zeros;
-  counter_t count_encode_0001_repeats;
-  counter_t count_encode_0010_b8d1;
-  counter_t count_encode_0011_b8d2;
-  counter_t count_encode_0100_b8d4;
-  counter_t count_encode_0101_b4d1;
-  counter_t count_encode_0110_b4d2;
-  counter_t count_encode_0111_b2d1;
-  counter_t count_encode_1111_uncompressed;
-
-  counter_t size_uncompressed;
-  counter_t size_compressed;
-
-  char cVCDname[256];
-  char dVCDname[256];
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -344,6 +330,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
 //	     md_addr_t *repl_addr);	/* for address of replaced block */
 
 	     md_addr_t *repl_addr,	/* for address of replaced block */
+	     char *cbuf,
+	     char *dbuf,
              struct mem_t *mem);
 
 ////////////////////////////////////////////////////////////////

@@ -287,16 +287,14 @@ SRCS =	main.c sim-fast.c sim-safe.c sim-cache.c sim-profile.c \
 	target-pisa/pisa.c target-pisa/loader.c target-pisa/syscall.c \
 	target-pisa/symbol.c \
 	target-alpha/alpha.c target-alpha/loader.c target-alpha/syscall.c \
-	target-alpha/symbol.c \
-        rcp_cache.c
+	target-alpha/symbol.c
 
 HDRS =	syscall.h memory.h regs.h sim.h loader.h cache.h bpred.h ptrace.h \
 	eventq.h resource.h endian.h dlite.h symbol.h eval.h bitmap.h \
 	eio.h range.h version.h endian.h misc.h power.h \
 	target-pisa/pisa.h target-pisa/pisabig.h target-pisa/pisalittle.h \
 	target-pisa/pisa.def target-pisa/ecoff.h \
-	target-alpha/alpha.h target-alpha/alpha.def target-alpha/ecoff.h \
-        rcp_cache.h
+	target-alpha/alpha.h target-alpha/alpha.def target-alpha/ecoff.h
 
 #
 # common objects
@@ -305,8 +303,7 @@ OBJS =	main.$(OEXT) syscall.$(OEXT) memory.$(OEXT) regs.$(OEXT) \
 	loader.$(OEXT) endian.$(OEXT) dlite.$(OEXT) symbol.$(OEXT) \
 	eval.$(OEXT) options.$(OEXT) stats.$(OEXT) eio.$(OEXT) \
 	range.$(OEXT) misc.$(OEXT) power.$(OEXT) \
-        machine.$(OEXT) \
-        rcp_cache.$(OEXT)
+    machine.$(OEXT)
 
 #
 # programs to build
