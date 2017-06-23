@@ -1,12 +1,12 @@
-/* 
- * cfetch - a variant of SimpleScalar developed for modelling cache compression and prefetching
- * based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
- * changes are commented //sdrea
- *
- * Sean Rea
- * sdrea@lakeheadu.ca
- * 2016-2017
- */
+// Variant of SimpleScalar developed for modelling cache compression and prefetching
+// Based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
+//
+// changes wrapped in //sdrea-begin ... //sdrea-end
+//
+// Sean Rea
+// sdrea@lakeheadu.ca
+// 2016-2017
+////////////////////////////////////////////////////////////////
 
 /* cache.h - cache module interfaces */
 
@@ -133,8 +133,14 @@ struct cache_blk_t
      pointer, deletion requires a trip through the hash table bucket list */
   md_addr_t tag;		/* data block tag value */
 
-  byte_t bdi_encode; //sdrea
-  qword_t bdi_mask; //sdrea
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+  byte_t bdi_encode;
+  qword_t bdi_mask;
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
   unsigned int status;		/* block status, see CACHE_BLK_* defs above */
   tick_t ready;		/* time when block will be accessible, field
@@ -215,7 +221,58 @@ struct cache_t
   counter_t writebacks;		/* total number of writebacks at misses */
   counter_t invalidations;	/* total number of external invalidations */
 
-  struct cfetch_io *cfetch; //sdrea
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+  int bdi_compress;
+  int bdi_check;
+  int write_vcd;
+
+  double cacti_tag_static_power;
+  double cacti_tag_read_dynamic_energy;
+  double cacti_tag_write_dynamic_energy;
+  double cacti_data_static_power;
+  double cacti_data_read_dynamic_energy;
+  double cacti_data_write_dynamic_energy;
+
+  int decompression_latency;
+
+  double sim_tag_static_power;
+  double sim_tag_read_dynamic_energy;
+  double sim_tag_write_dynamic_energy;
+  double sim_data_static_power;
+  double sim_data_read_dynamic_energy;
+  double sim_data_write_dynamic_energy;
+
+  tick_t last_cache_access;
+
+  int compressor_frequency;
+
+  tick_t compressed_hits;
+  int last_compressed_size;
+
+  counter_t count_check_lines;
+  counter_t count_compressible_any;
+
+  counter_t count_encode_lines;
+  counter_t count_encode_0000_zeros;
+  counter_t count_encode_0001_repeats;
+  counter_t count_encode_0010_b8d1;
+  counter_t count_encode_0011_b8d2;
+  counter_t count_encode_0100_b8d4;
+  counter_t count_encode_0101_b4d1;
+  counter_t count_encode_0110_b4d2;
+  counter_t count_encode_0111_b2d1;
+  counter_t count_encode_1111_uncompressed;
+
+  counter_t size_uncompressed;
+  counter_t size_compressed;
+
+  char cVCDname[256];
+  char dVCDname[256];
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
   /* last block to hit, used to optimize cache hit processing */
   md_addr_t last_tagset;	/* tag of last line accessed */
@@ -280,8 +337,17 @@ cache_access(struct cache_t *cp,	/* cache to access */
 	     int nbytes,		/* number of bytes to access */
 	     tick_t now,		/* time of access */
 	     byte_t **udata,		/* for return of user data ptr */
+
+//sdrea-begin
+////////////////////////////////////////////////////////////////
+
+//	     md_addr_t *repl_addr);	/* for address of replaced block */
+
 	     md_addr_t *repl_addr,	/* for address of replaced block */
-             struct mem_t *mem); //sdrea
+             struct mem_t *mem);
+
+////////////////////////////////////////////////////////////////
+//sdrea-end
 
 /* cache access functions, these are safe, they check alignment and
    permissions */

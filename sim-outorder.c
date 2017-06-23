@@ -1,12 +1,12 @@
-/* 
- * cfetch - a variant of SimpleScalar developed for modelling cache compression and prefetching
- * based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
- * changes are commented //sdrea
- *
- * Sean Rea
- * sdrea@lakeheadu.ca
- * 2016-2017
- */
+// Variant of SimpleScalar developed for modelling cache compression and prefetching
+// Based on sim-wattch-1.02e - http://www.eecs.harvard.edu/~dbrooks/wattch-form.html
+//
+// changes wrapped in //sdrea-begin ... //sdrea-end
+//
+// Sean Rea
+// sdrea@lakeheadu.ca
+// 2016-2017
+////////////////////////////////////////////////////////////////
 
 /* sim-outorder.c - sample out-of-order issue perf simulator implementation */
 
@@ -91,7 +91,6 @@
 
 #include <time.h>
 #include <string.h>
-#include "cfetch.h"
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -1640,53 +1639,53 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
-      cache_il1->cfetch->bdi_compress = il1_bdi_compress;
-      cache_il1->cfetch->bdi_check = il1_bdi_check;
-      cache_il1->cfetch->cacti_tag_static_power = il1_cacti_tag_static_power;
-      cache_il1->cfetch->cacti_tag_read_dynamic_energy = il1_cacti_tag_read_dynamic_energy;
-      cache_il1->cfetch->cacti_tag_write_dynamic_energy = il1_cacti_tag_write_dynamic_energy;
-      cache_il1->cfetch->cacti_data_static_power = il1_cacti_data_static_power;
-      cache_il1->cfetch->cacti_data_read_dynamic_energy = il1_cacti_data_read_dynamic_energy;
-      cache_il1->cfetch->cacti_data_write_dynamic_energy = il1_cacti_data_write_dynamic_energy;
-      cache_il1->cfetch->decompression_latency = il1_decompression_latency;
+      cache_il1->bdi_compress = il1_bdi_compress;
+      cache_il1->bdi_check = il1_bdi_check;
+      cache_il1->cacti_tag_static_power = il1_cacti_tag_static_power;
+      cache_il1->cacti_tag_read_dynamic_energy = il1_cacti_tag_read_dynamic_energy;
+      cache_il1->cacti_tag_write_dynamic_energy = il1_cacti_tag_write_dynamic_energy;
+      cache_il1->cacti_data_static_power = il1_cacti_data_static_power;
+      cache_il1->cacti_data_read_dynamic_energy = il1_cacti_data_read_dynamic_energy;
+      cache_il1->cacti_data_write_dynamic_energy = il1_cacti_data_write_dynamic_energy;
+      cache_il1->decompression_latency = il1_decompression_latency;
 
-  cache_il1->cfetch->compressor_frequency = compressor_frequency;
+  cache_il1->compressor_frequency = compressor_frequency;
 
-      cache_dl1->cfetch->bdi_compress = dl1_bdi_compress;
-      cache_dl1->cfetch->bdi_check = dl1_bdi_check;
-      cache_dl1->cfetch->cacti_tag_static_power = dl1_cacti_tag_static_power;
-      cache_dl1->cfetch->cacti_tag_read_dynamic_energy = dl1_cacti_tag_read_dynamic_energy;
-      cache_dl1->cfetch->cacti_tag_write_dynamic_energy = dl1_cacti_tag_write_dynamic_energy;
-      cache_dl1->cfetch->cacti_data_static_power = dl1_cacti_data_static_power;
-      cache_dl1->cfetch->cacti_data_read_dynamic_energy = dl1_cacti_data_read_dynamic_energy;
-      cache_dl1->cfetch->cacti_data_write_dynamic_energy = dl1_cacti_data_write_dynamic_energy;
-      cache_dl1->cfetch->decompression_latency = dl1_decompression_latency;
+      cache_dl1->bdi_compress = dl1_bdi_compress;
+      cache_dl1->bdi_check = dl1_bdi_check;
+      cache_dl1->cacti_tag_static_power = dl1_cacti_tag_static_power;
+      cache_dl1->cacti_tag_read_dynamic_energy = dl1_cacti_tag_read_dynamic_energy;
+      cache_dl1->cacti_tag_write_dynamic_energy = dl1_cacti_tag_write_dynamic_energy;
+      cache_dl1->cacti_data_static_power = dl1_cacti_data_static_power;
+      cache_dl1->cacti_data_read_dynamic_energy = dl1_cacti_data_read_dynamic_energy;
+      cache_dl1->cacti_data_write_dynamic_energy = dl1_cacti_data_write_dynamic_energy;
+      cache_dl1->decompression_latency = dl1_decompression_latency;
 
-  cache_dl1->cfetch->compressor_frequency = compressor_frequency;
+  cache_dl1->compressor_frequency = compressor_frequency;
 
-      cache_il2->cfetch->bdi_compress = il2_bdi_compress;
-      cache_il2->cfetch->bdi_check = il2_bdi_check;
-      cache_il2->cfetch->cacti_tag_static_power = il2_cacti_tag_static_power;
-      cache_il2->cfetch->cacti_tag_read_dynamic_energy = il2_cacti_tag_read_dynamic_energy;
-      cache_il2->cfetch->cacti_tag_write_dynamic_energy = il2_cacti_tag_write_dynamic_energy;
-      cache_il2->cfetch->cacti_data_static_power = il2_cacti_data_static_power;
-      cache_il2->cfetch->cacti_data_read_dynamic_energy = il2_cacti_data_read_dynamic_energy;
-      cache_il2->cfetch->cacti_data_write_dynamic_energy = il2_cacti_data_write_dynamic_energy;
-      cache_il2->cfetch->decompression_latency = il2_decompression_latency;
+      cache_il2->bdi_compress = il2_bdi_compress;
+      cache_il2->bdi_check = il2_bdi_check;
+      cache_il2->cacti_tag_static_power = il2_cacti_tag_static_power;
+      cache_il2->cacti_tag_read_dynamic_energy = il2_cacti_tag_read_dynamic_energy;
+      cache_il2->cacti_tag_write_dynamic_energy = il2_cacti_tag_write_dynamic_energy;
+      cache_il2->cacti_data_static_power = il2_cacti_data_static_power;
+      cache_il2->cacti_data_read_dynamic_energy = il2_cacti_data_read_dynamic_energy;
+      cache_il2->cacti_data_write_dynamic_energy = il2_cacti_data_write_dynamic_energy;
+      cache_il2->decompression_latency = il2_decompression_latency;
 
-  cache_il2->cfetch->compressor_frequency = compressor_frequency;
+  cache_il2->compressor_frequency = compressor_frequency;
 
-      cache_dl2->cfetch->bdi_compress = dl2_bdi_compress;
-      cache_dl2->cfetch->bdi_check = dl2_bdi_check;
-      cache_dl2->cfetch->cacti_tag_static_power = dl2_cacti_tag_static_power;
-      cache_dl2->cfetch->cacti_tag_read_dynamic_energy = dl2_cacti_tag_read_dynamic_energy;
-      cache_dl2->cfetch->cacti_tag_write_dynamic_energy = dl2_cacti_tag_write_dynamic_energy;
-      cache_dl2->cfetch->cacti_data_static_power = dl2_cacti_data_static_power;
-      cache_dl2->cfetch->cacti_data_read_dynamic_energy = dl2_cacti_data_read_dynamic_energy;
-      cache_dl2->cfetch->cacti_data_write_dynamic_energy = dl2_cacti_data_write_dynamic_energy;
-      cache_dl2->cfetch->decompression_latency = dl2_decompression_latency;
+      cache_dl2->bdi_compress = dl2_bdi_compress;
+      cache_dl2->bdi_check = dl2_bdi_check;
+      cache_dl2->cacti_tag_static_power = dl2_cacti_tag_static_power;
+      cache_dl2->cacti_tag_read_dynamic_energy = dl2_cacti_tag_read_dynamic_energy;
+      cache_dl2->cacti_tag_write_dynamic_energy = dl2_cacti_tag_write_dynamic_energy;
+      cache_dl2->cacti_data_static_power = dl2_cacti_data_static_power;
+      cache_dl2->cacti_data_read_dynamic_energy = dl2_cacti_data_read_dynamic_energy;
+      cache_dl2->cacti_data_write_dynamic_energy = dl2_cacti_data_write_dynamic_energy;
+      cache_dl2->decompression_latency = dl2_decompression_latency;
 
-  cache_dl2->cfetch->compressor_frequency = compressor_frequency;
+  cache_dl2->compressor_frequency = compressor_frequency;
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -3755,14 +3754,14 @@ ruu_issue(void)
 //				  if (load_lat > cache_dl1_lat)
 //				    events |= PEV_CACHEMISS;
 
- 				  tick_t tmp_comp_hits = cache_dl1->cfetch->compressed_hits;
+ 				  tick_t tmp_comp_hits = cache_dl1->compressed_hits;
 				  tmp_misses_dl1 = cache_dl1->misses;
 
 				      if (PREFETCH_TABLE_TYPE == 0)
                                       {
 				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
 				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
-				          if (cache_dl1->cfetch->compressed_hits > tmp_comp_hits) 
+				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
 				          {
 				            count_comp_hits++;
 				          }
@@ -3808,11 +3807,11 @@ ruu_issue(void)
                                           // Prefetch table DATA(ADDR) READ
 						pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
 					  // L1 compressed read
-						cache_dl1->cfetch->sim_tag_read_dynamic_energy += cache_dl1->cfetch->cacti_tag_read_dynamic_energy;
-						cache_dl1->cfetch->sim_data_read_dynamic_energy += (double) blk->compressed_data_size / cache_dl1->bsize * cache_dl1->cfetch->cacti_data_read_dynamic_energy;
-						cache_dl1->cfetch->sim_tag_static_power += (sim_cycle - cache_dl1->cfetch->last_cache_access) * cache_dl1->cfetch->cacti_tag_static_power;
-						cache_dl1->cfetch->sim_data_static_power += (sim_cycle - cache_dl1->cfetch->last_cache_access) * cache_dl1->cfetch->cacti_data_static_power;
-						cache_dl1->cfetch->last_cache_access = sim_cycle;
+						cache_dl1->sim_tag_read_dynamic_energy += cache_dl1->cacti_tag_read_dynamic_energy;
+						cache_dl1->sim_data_read_dynamic_energy += (double) blk->compressed_data_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
+						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
+						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
+						cache_dl1->last_cache_access = sim_cycle;
 					  // Plus I wrote to the prefetch buffer register containing the decompressed line, then read it, and calc static
 					 	pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
 					 	pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
@@ -3823,7 +3822,7 @@ ruu_issue(void)
 				          pf_no_correct++;
 				          load_lat = cache_access(cache_dl1, Read, (rs->addr & ~3), NULL, 4, sim_cycle, NULL, NULL, mem);
 				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
-				          if (cache_dl1->cfetch->compressed_hits > tmp_comp_hits) 
+				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
 				          {
 				            count_comp_hits++;
 				            pf_table_writes++;
@@ -3831,7 +3830,7 @@ ruu_issue(void)
 					    blk=last->sets[set].way_tail;
 				            blk->tag = rs->PC & ~(last->nsets-1);
 				            blk->addr = rs->addr;
-					    blk->compressed_data_size = cache_dl1->cfetch->last_compressed_size;
+					    blk->compressed_data_size = cache_dl1->last_compressed_size;
 					    if (last->assoc > 1) {
 					      blk->way_next = last->sets[set].way_head;
 					      last->sets[set].way_tail = blk->way_prev;
@@ -3909,11 +3908,11 @@ ruu_issue(void)
 					  // Prefetch table DATA(ADDR) WRITE
 						pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
 					  // L1 compressed read
-						cache_dl1->cfetch->sim_tag_read_dynamic_energy += cache_dl1->cfetch->cacti_tag_read_dynamic_energy;
-						cache_dl1->cfetch->sim_data_read_dynamic_energy += (double) cache_dl1->cfetch->last_compressed_size / cache_dl1->bsize * cache_dl1->cfetch->cacti_data_read_dynamic_energy;
-						cache_dl1->cfetch->sim_tag_static_power += (sim_cycle - cache_dl1->cfetch->last_cache_access) * cache_dl1->cfetch->cacti_tag_static_power;
-						cache_dl1->cfetch->sim_data_static_power += (sim_cycle - cache_dl1->cfetch->last_cache_access) * cache_dl1->cfetch->cacti_data_static_power;
-						cache_dl1->cfetch->last_cache_access = sim_cycle;
+						cache_dl1->sim_tag_read_dynamic_energy += cache_dl1->cacti_tag_read_dynamic_energy;
+						cache_dl1->sim_data_read_dynamic_energy += (double) cache_dl1->last_compressed_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
+						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
+						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
+						cache_dl1->last_cache_access = sim_cycle;
 					  // Plus I wrote to the prefetch buffer register containing the decompressed line, then read it, and calc static
 					 	pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
 					 	pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
@@ -3964,11 +3963,11 @@ ruu_issue(void)
                                           // Prefetch table DATA(ADDR) READ
 						pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
 					  // L1 compressed read
-					  	cache_dl1->cfetch->sim_tag_read_dynamic_energy += cache_dl1->cfetch->cacti_tag_read_dynamic_energy;
-						cache_dl1->cfetch->sim_data_read_dynamic_energy += (double) blk->compressed_data_size / cache_dl1->bsize * cache_dl1->cfetch->cacti_data_read_dynamic_energy;
-						cache_dl1->cfetch->sim_tag_static_power += (sim_cycle - cache_dl1->cfetch->last_cache_access) * cache_dl1->cfetch->cacti_tag_static_power;
-						cache_dl1->cfetch->sim_data_static_power += (sim_cycle - cache_dl1->cfetch->last_cache_access) * cache_dl1->cfetch->cacti_data_static_power;
-						cache_dl1->cfetch->last_cache_access = sim_cycle;
+					  	cache_dl1->sim_tag_read_dynamic_energy += cache_dl1->cacti_tag_read_dynamic_energy;
+						cache_dl1->sim_data_read_dynamic_energy += (double) blk->compressed_data_size / cache_dl1->bsize * cache_dl1->cacti_data_read_dynamic_energy;
+						cache_dl1->sim_tag_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_tag_static_power;
+						cache_dl1->sim_data_static_power += (sim_cycle - cache_dl1->last_cache_access) * cache_dl1->cacti_data_static_power;
+						cache_dl1->last_cache_access = sim_cycle;
 					  // Plus I wrote to the prefetch buffer register containing the decompressed line, then read it, and calc static
 					 	pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
 					 	pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
@@ -3995,7 +3994,7 @@ ruu_issue(void)
 
 
 				          if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
-				          if (cache_dl1->cfetch->compressed_hits > tmp_comp_hits) 
+				          if (cache_dl1->compressed_hits > tmp_comp_hits) 
 				          {
 					    
 				            count_comp_hits++;
@@ -4019,7 +4018,7 @@ ruu_issue(void)
 						blk->addr = rs->addr;
 						blk->stride = 0;
 						blk->state = 0;
-						blk->compressed_data_size = cache_dl1->cfetch->last_compressed_size;
+						blk->compressed_data_size = cache_dl1->last_compressed_size;
 
 					      if (stride->assoc > 1) {
 					        blk->way_next = stride->sets[set].way_head;
@@ -6312,7 +6311,7 @@ fprintf(stderr, "sim: ** starting performance simulation **\n");
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
 
-if (cache_dl1->cfetch->write_vcd) {
+if (cache_dl1->write_vcd) {
 
 time_t now;
 now = time(NULL);
@@ -6321,10 +6320,10 @@ ts = localtime(&now);
 char tbuf[80];
 strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S %Z\n", ts);
 
-strcpy(cache_dl1->cfetch->cVCDname, vcdpath);
-strcat(cache_dl1->cfetch->cVCDname, "c.dl1.");
-strcat(cache_dl1->cfetch->cVCDname, vcd);
-fp = fopen(cache_dl1->cfetch->cVCDname, "w+");
+strcpy(cache_dl1->cVCDname, vcdpath);
+strcat(cache_dl1->cVCDname, "c.dl1.");
+strcat(cache_dl1->cVCDname, vcd);
+fp = fopen(cache_dl1->cVCDname, "w+");
 fprintf(fp, "$date\n");
 fprintf(fp, tbuf);
 fprintf(fp, "$end\n");
@@ -6354,10 +6353,10 @@ fprintf(fp, "\n");
 fclose(fp);
 
 
-strcpy(cache_dl1->cfetch->dVCDname, vcdpath);
-strcat(cache_dl1->cfetch->dVCDname, "d.dl1.");
-strcat(cache_dl1->cfetch->dVCDname, vcd);
-fp = fopen(cache_dl1->cfetch->dVCDname, "w+");
+strcpy(cache_dl1->dVCDname, vcdpath);
+strcat(cache_dl1->dVCDname, "d.dl1.");
+strcat(cache_dl1->dVCDname, vcd);
+fp = fopen(cache_dl1->dVCDname, "w+");
 fprintf(fp, "$date\n");
 fprintf(fp, tbuf);
 fprintf(fp, "$end\n");
