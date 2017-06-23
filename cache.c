@@ -166,7 +166,6 @@ FILE *fp;
 
 void cp_init_cache (struct cache_t *cp) {
 
-cp->bdi_check = 0;
 cp->bdi_compress = 0;
 cp->write_vcd = 0;
 

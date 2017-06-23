@@ -95,9 +95,10 @@
 
 static counter_t debuff_eject_unread;
 static counter_t debuff_eject_read;
+static counter_t debuff_eject_conflict_miss;
 
 static int il1_bdi_compress;
-static int il1_bdi_check;
+static int il1_write_vcd;
 static double il1_cacti_tag_static_power;
 static double il1_cacti_tag_read_dynamic_energy;
 static double il1_cacti_tag_write_dynamic_energy;
@@ -107,7 +108,7 @@ static double il1_cacti_data_write_dynamic_energy;
 static int il1_decompression_latency;
 
 static int dl1_bdi_compress;
-static int dl1_bdi_check;
+static int dl1_write_vcd;
 static double dl1_cacti_tag_static_power;
 static double dl1_cacti_tag_read_dynamic_energy;
 static double dl1_cacti_tag_write_dynamic_energy;
@@ -117,7 +118,7 @@ static double dl1_cacti_data_write_dynamic_energy;
 static int dl1_decompression_latency;
 
 static int il2_bdi_compress;
-static int il2_bdi_check;
+static int il2_write_vcd;
 static double il2_cacti_tag_static_power;
 static double il2_cacti_tag_read_dynamic_energy;
 static double il2_cacti_tag_write_dynamic_energy;
@@ -127,7 +128,7 @@ static double il2_cacti_data_write_dynamic_energy;
 static int il2_decompression_latency;
 
 static int dl2_bdi_compress;
-static int dl2_bdi_check;
+static int dl2_write_vcd;
 static double dl2_cacti_tag_static_power;
 static double dl2_cacti_tag_read_dynamic_energy;
 static double dl2_cacti_tag_write_dynamic_energy;
@@ -280,6 +281,8 @@ fclose(fp);
 
 void cp_options (struct opt_odb_t *odb) {
 
+ // COMMAND LINE ARGS
+
  opt_reg_int(odb, "-interval", "Simpoint interval size",
 	      &simpoint_interval, /* default */100000000,
 	      /* print */TRUE, /* format */NULL);
@@ -296,13 +299,15 @@ void cp_options (struct opt_odb_t *odb) {
 		 "vcd suffix",
 		 &vcd, "", /* print */TRUE, NULL);
 
+ // CONFIG FILE ARGS
+
+  opt_reg_flag(odb, "-cache:il1:write_vcd",
+	       "il1 VCD output flag",
+	       &il1_write_vcd, /* default */FALSE, /* print */TRUE, NULL);
+
   opt_reg_flag(odb, "-cache:il1:bdi-compress",
 	       "il1 compressed using Base-Delta-Immediate",
 	       &il1_bdi_compress, /* default */FALSE, /* print */TRUE, NULL);
-
-  opt_reg_flag(odb, "-cache:il1:bdi-check",
-	       "il1 checked for compressibility using Base-Delta-Immediate",
-	       &il1_bdi_check, /* default */FALSE, /* print */TRUE, NULL);
 
   opt_reg_double(odb, "-cache:il1:tag:static-power",
                 "il1 tag leakage power (static power) (mW)",
@@ -332,13 +337,13 @@ void cp_options (struct opt_odb_t *odb) {
                 "il1 decompression latency",
                 &il1_decompression_latency, 0, TRUE, NULL);
 
+  opt_reg_flag(odb, "-cache:dl1:write_vcd",
+	       "dl1 VCD output flag",
+	       &dl1_write_vcd, /* default */FALSE, /* print */TRUE, NULL);
+
   opt_reg_flag(odb, "-cache:dl1:bdi-compress",
 	       "dl1 compressed using Base-Delta-Immediate",
 	       &dl1_bdi_compress, /* default */FALSE, /* print */TRUE, NULL);
-
-  opt_reg_flag(odb, "-cache:dl1:bdi-check",
-	       "dl1 checked for compressibility using Base-Delta-Immediate",
-	       &dl1_bdi_check, /* default */FALSE, /* print */TRUE, NULL);
 
   opt_reg_double(odb, "-cache:dl1:tag:static-power",
                 "dl1 tag leakage power (static power) (mW)",
@@ -372,9 +377,9 @@ void cp_options (struct opt_odb_t *odb) {
 	       "il2 compressed using Base-Delta-Immediate",
 	       &il2_bdi_compress, /* default */FALSE, /* print */TRUE, NULL);
 
-  opt_reg_flag(odb, "-cache:il2:bdi-check",
-	       "il2 checked for compressibility using Base-Delta-Immediate",
-	       &il2_bdi_check, /* default */FALSE, /* print */TRUE, NULL);
+  opt_reg_flag(odb, "-cache:il2:write_vcd",
+	       "il2 VCD output flag",
+	       &il2_write_vcd, /* default */FALSE, /* print */TRUE, NULL);
 
   opt_reg_double(odb, "-cache:il2:tag:static-power",
                 "il2 tag leakage power (static power) (mW)",
@@ -408,9 +413,9 @@ void cp_options (struct opt_odb_t *odb) {
 	       "dl2 compressed using Base-Delta-Immediate",
 	       &dl2_bdi_compress, /* default */FALSE, /* print */TRUE, NULL);
 
-  opt_reg_flag(odb, "-cache:dl2:bdi-check",
-	       "dl2 checked for compressibility using Base-Delta-Immediate",
-	       &dl2_bdi_check, /* default */FALSE, /* print */TRUE, NULL);
+  opt_reg_flag(odb, "-cache:dl2:write_vcd",
+	       "dl2 VCD output flag",
+	       &dl2_write_vcd, /* default */FALSE, /* print */TRUE, NULL);
 
   opt_reg_double(odb, "-cache:dl2:tag:static-power",
                 "dl2 tag leakage power (static power) (mW)",
@@ -599,6 +604,10 @@ void cp_stats (struct stat_sdb_t *sdb) {
 	       "Read decompression buffer entries tossed out",
 	       &debuff_eject_read, debuff_eject_read, "%32d");
 
+  stat_reg_int(sdb, "debuff_eject_conflict_miss",
+	       "Decompression buffer entries tossed out due to cache miss",
+	       &debuff_eject_conflict_miss, debuff_eject_conflict_miss, "%32d");
+
 }
 
 
@@ -755,6 +764,7 @@ struct debuff_queue_node
 {
   struct debuff_queue_node *prev;
   struct debuff_queue_node *next;
+  md_addr_t pc;
   md_addr_t addr;
   tick_t rdy;
   int state;
@@ -783,6 +793,7 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
     tmp = &in->nodes[0];
     tmp->prev = NULL;
     tmp->next = NULL;
+    tmp->pc = 0;
     tmp->addr = 0;
     tmp->rdy = 0;
     tmp->state = 0;
@@ -795,6 +806,7 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
     tmp = &in->nodes[0];
     tmp->prev = NULL;
     tmp->next = &in->nodes[1];
+    tmp->pc = 0;
     tmp->addr = 0;
     tmp->rdy = 0;
     tmp->state = 0;
@@ -804,6 +816,7 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
     tmp = &in->nodes[size-1];
     tmp->prev = &in->nodes[size-2];
     tmp->next = NULL;
+    tmp->pc = 0;
     tmp->addr = 0;
     tmp->rdy = 0;
     tmp->state = 0;
@@ -813,6 +826,7 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
       tmp = &in->nodes[i];
       tmp->prev = &in->nodes[i-1];
       tmp->next = &in->nodes[i+1];
+    tmp->pc = 0;
     tmp->addr = 0;
     tmp->rdy = 0;
     tmp->state = 0;
@@ -823,7 +837,7 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
 
 }
 
-void cp_debuff_queue_addNode (struct cache_t *cp, struct debuff_queue* in, md_addr_t addr_in, tick_t cycle_in) {
+void cp_debuff_queue_addNode (struct cache_t *cp, struct debuff_queue* in, md_addr_t pc_in, md_addr_t addr_in, tick_t cycle_in) {
 
   struct debuff_queue_node *tmp;
   tmp = in->head;
@@ -833,19 +847,16 @@ void cp_debuff_queue_addNode (struct cache_t *cp, struct debuff_queue* in, md_ad
       // count ejections from table
       if (tmp->state == 0) debuff_eject_unread++;
       if (tmp->state == 1) debuff_eject_read++;
+      if (tmp->state == 2) debuff_eject_conflict_miss++;
     }
 
-  if (tmp->next == NULL) 
+    tmp->pc = pc_in;
+    tmp->addr = addr_in;
+    tmp->state = 0;
+    tmp->rdy = cycle_in + PREFETCH_TABLE_DELAY + cp->hit_latency + DECOMPRESSION_LATENCY;
+
+  if (tmp->next) 
     {
-      // One entry table
-      tmp->addr = addr_in;
-      tmp->rdy = cycle_in + PREFETCH_TABLE_DELAY + cp->hit_latency + DECOMPRESSION_LATENCY;
-    }
-  else 
-    {
-      // Many entry table
-      tmp->addr = addr_in;
-      tmp->rdy = cycle_in + PREFETCH_TABLE_DELAY + cp->hit_latency + DECOMPRESSION_LATENCY;
       in->head = tmp->next;
       in->head->prev = NULL;
       tmp->prev = in->tail;
@@ -987,6 +998,7 @@ void cp_assign_options(struct cache_t *cp) {
   if ( !strcmp(cp->name, "il1") )
   {
       cp->bdi_compress = il1_bdi_compress;
+      cp->write_vcd = il1_write_vcd;
       cp->cacti_tag_static_power = il1_cacti_tag_static_power;
       cp->cacti_tag_read_dynamic_energy = il1_cacti_tag_read_dynamic_energy;
       cp->cacti_tag_write_dynamic_energy = il1_cacti_tag_write_dynamic_energy;
@@ -999,6 +1011,7 @@ void cp_assign_options(struct cache_t *cp) {
 else if ( !strcmp(cp->name, "dl1") )
   {
       cp->bdi_compress = dl1_bdi_compress;
+      cp->write_vcd = dl1_write_vcd;
       cp->cacti_tag_static_power = dl1_cacti_tag_static_power;
       cp->cacti_tag_read_dynamic_energy = dl1_cacti_tag_read_dynamic_energy;
       cp->cacti_tag_write_dynamic_energy = dl1_cacti_tag_write_dynamic_energy;
@@ -1011,6 +1024,7 @@ else if ( !strcmp(cp->name, "dl1") )
 else if ( !strcmp(cp->name, "il2") )
   {
       cp->bdi_compress = il2_bdi_compress;
+      cp->write_vcd = il2_write_vcd;
       cp->cacti_tag_static_power = il2_cacti_tag_static_power;
       cp->cacti_tag_read_dynamic_energy = il2_cacti_tag_read_dynamic_energy;
       cp->cacti_tag_write_dynamic_energy = il2_cacti_tag_write_dynamic_energy;
@@ -1023,6 +1037,7 @@ else if ( !strcmp(cp->name, "il2") )
 else if ( !strcmp(cp->name, "dl2") )
   {
       cp->bdi_compress = dl2_bdi_compress;
+      cp->write_vcd = dl2_write_vcd;
       cp->cacti_tag_static_power = dl2_cacti_tag_static_power;
       cp->cacti_tag_read_dynamic_energy = dl2_cacti_tag_read_dynamic_energy;
       cp->cacti_tag_write_dynamic_energy = dl2_cacti_tag_write_dynamic_energy;
@@ -1037,34 +1052,77 @@ else if ( !strcmp(cp->name, "dl2") )
 
 md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
 
-md_addr_t addr = NULL;
+  md_addr_t addr = 0;
 
-if (PREFETCH_TABLE_TYPE == 1)
-  {
+  if (PREFETCH_TABLE_TYPE == 0)
+    {
+      // NO PREFETCHING
+    }
 
-    struct pf_last_blk *blk;
-    int set = pc & last->nsets-1;
+  if (PREFETCH_TABLE_TYPE == 1) 
+    {
 
-    for (blk=last->sets[set].way_head; blk; blk=blk->way_next)
-      {
-        if ( blk->tag == (pc & ~(last->nsets-1)) ) addr = blk->addr;
-        break;
-      }
+      // LAST OUTCOME (LO)
 
-  //prefetch table power
-  pf_sim_tag_static_power = sim_cycle_in * pf_cacti_tag_static_power;
-  pf_sim_data_static_power = sim_cycle_in * pf_cacti_data_static_power;
-  pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
-  if (addr) pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
+      struct pf_last_blk *blk;
+      int set = pc & last->nsets-1;
+
+      for (blk=last->sets[set].way_head; blk; blk=blk->way_next)
+        {
+          if ( blk->tag == (pc & ~(last->nsets-1)) ) addr = blk->addr;
+          break;
+        }
+
+      // power
+      pf_sim_tag_static_power = sim_cycle_in * pf_cacti_tag_static_power;
+      pf_sim_data_static_power = sim_cycle_in * pf_cacti_data_static_power;
+      pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
+      if (addr) pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
 
   }
+
+  if (PREFETCH_TABLE_TYPE == 2) 
+    {
+
+      // STRIDE (S)
+
+      
+
+    }
+
+  if (PREFETCH_TABLE_TYPE == 3) 
+    {
+
+      // TWO LEVEL (2L)
+
+      
+
+    }
+
+  if (PREFETCH_TABLE_TYPE == 4) 
+    {
+
+      // HYBRID S/LO
+
+      
+
+    }
+
+  if (PREFETCH_TABLE_TYPE == 5) 
+    {
+
+      // HYBRID 2L/S
+
+      
+
+    }
 
 return addr;
 
 }
 
 
-int cp_prefetch(md_addr_t pc, md_addr_t addr, tick_t cycle, int cmiss, int chit ) {
+int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, int cmiss, int chit ) {
     
   struct debuff_queue *tmp;
   struct debuff_queue_node *node;
@@ -1086,7 +1144,7 @@ int cp_prefetch(md_addr_t pc, md_addr_t addr, tick_t cycle, int cmiss, int chit 
       int set = pc & last->nsets-1;
 
       for (node=tmp->head; node; node=node->next) {
-
+ //TODO try to determine which are mispredictions and which are tossed out due to overflow
         if ( (node->addr) == (addr) && node->state == 0) {
           node->state = 1;
           hit = 1;
@@ -1098,12 +1156,17 @@ int cp_prefetch(md_addr_t pc, md_addr_t addr, tick_t cycle, int cmiss, int chit 
       if (hit) 
         {
           // Decompression buffer hit
-          lat = DECOMPRESSION_BUFFER_LATENCY + decomp_remaining;
-          if (cmiss) fatal ("Hit decompression buffer but missed cache");
+          lat = DECOMPRESSION_BUFFER_LATENCY + decomp_remaining - cp->hit_latency;
+          if (cmiss) 
+            {
+              // data was knocked off way list in cache since last hit - full latency
+              node->state = 2;
+              lat = DECOMPRESSION_LATENCY;
+            }
 
-         //power
-         pf_sim_buf_static_power = cycle * pf_cacti_buf_static_power;
-         pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
+          //power
+          pf_sim_buf_static_power = cycle * pf_cacti_buf_static_power;
+          pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
         }
 
       // Update prefetch table if compressed hit
@@ -1124,6 +1187,13 @@ int cp_prefetch(md_addr_t pc, md_addr_t addr, tick_t cycle, int cmiss, int chit 
               blk=blk->way_next;
               blk->way_prev = last->sets[set].way_head;
             }
+
+          // power
+          pf_sim_tag_static_power = cycle * pf_cacti_tag_static_power;
+          pf_sim_data_static_power = cycle * pf_cacti_data_static_power;
+          pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
+          pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
+
         }
     }
 
@@ -4089,7 +4159,7 @@ ruu_issue(void)
 
                                  if (cmiss) events |= PEV_CACHEMISS;
 
-                                 load_lat += cp_prefetch(rs->PC, rs->addr, sim_cycle, cmiss, chit);
+                                 load_lat += cp_prefetch(cache_dl1, rs->PC, rs->addr, sim_cycle, cmiss, chit);
 			                                       
 ////////////////////////////////////////////////////////////////
 //sdrea-end
@@ -5237,7 +5307,7 @@ struct RUU_station *tmp_rs;
 
       md_addr_t cp_addr = NULL; //sdrea
       if ( ( MD_OP_FLAGS(op) & (F_MEM|F_LOAD) ) == (F_MEM|F_LOAD) ) cp_addr = cp_table_check(regs.regs_PC, sim_cycle); //sdrea
-      if ( cp_addr ) cp_debuff_queue_addNode ( cache_dl1, &dc_buffer, cp_addr, sim_cycle ); //sdrea
+      if ( cp_addr ) cp_debuff_queue_addNode ( cache_dl1, &dc_buffer, regs.regs_PC, cp_addr, sim_cycle ); //sdrea
 
       /* compute default next PC */
       regs.regs_NPC = regs.regs_PC + sizeof(md_inst_t);
@@ -6170,7 +6240,7 @@ sim_main(void)
 ////////////////////////////////////////////////////////////////
 
 delay_ready_queue_initial(&delay_ready_queue);
-debuff_queue_initial(&dc_buffer, 8);
+debuff_queue_initial(&dc_buffer, 16);
 
 count_comp_hits = 0;
 pf_table_writes = 0;

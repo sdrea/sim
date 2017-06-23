@@ -227,7 +227,6 @@ struct cache_t
 ////////////////////////////////////////////////////////////////
 
   int bdi_compress; 
-  int bdi_check;
   int write_vcd; 
 
   double cacti_tag_static_power;
