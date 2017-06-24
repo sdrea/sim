@@ -94,8 +94,11 @@
 #include <string.h>
 
 static counter_t debuff_eject_unread;
-static counter_t debuff_eject_read;
-static counter_t debuff_eject_conflict_miss;
+static counter_t debuff_eject_goodpred;
+static counter_t debuff_eject_mispred;
+static counter_t debuff_eject_conflictmiss;
+
+static counter_t debuff_eject_lsq_squash;
 
 static int il1_bdi_compress;
 static int il1_write_vcd;
@@ -147,6 +150,8 @@ static int WRITEBACK_TO_COMMIT_LATENCY_OPTION;
 
 counter_t count_comp_hits;
 counter_t pf_table_writes;
+counter_t ld_fetch_hit;
+counter_t ld_fetch_miss;
 
 counter_t pf_table_reads;
 counter_t pf_table_hits;
@@ -550,6 +555,14 @@ void cp_stats (struct stat_sdb_t *sdb) {
 	       "prefetch table writes",
 	       &pf_table_writes, pf_table_writes, "%32d");
 
+  stat_reg_int(sdb, "ld_fetch_hit",
+	       "prefetch table hits",
+	       &ld_fetch_hit, ld_fetch_hit, "%32d");
+
+  stat_reg_int(sdb, "ld_fetch_miss",
+	       "prefetch table misses",
+	       &ld_fetch_miss, ld_fetch_miss, "%32d");
+
   stat_reg_int(sdb, "pf_last_correct",
 	       "prefetch last table correct predictions",
 	       &pf_last_correct, pf_last_correct, "%32d");
@@ -600,13 +613,21 @@ void cp_stats (struct stat_sdb_t *sdb) {
 	       "Unread decompression buffer entries tossed out",
 	       &debuff_eject_unread, debuff_eject_unread, "%32d");
 
-  stat_reg_int(sdb, "debuff_eject_read",
-	       "Read decompression buffer entries tossed out",
-	       &debuff_eject_read, debuff_eject_read, "%32d");
+  stat_reg_int(sdb, "debuff_eject_goodpred",
+	       "Correct prediction decompression buffer entries tossed out",
+	       &debuff_eject_goodpred, debuff_eject_goodpred, "%32d");
 
-  stat_reg_int(sdb, "debuff_eject_conflict_miss",
-	       "Decompression buffer entries tossed out due to cache miss",
-	       &debuff_eject_conflict_miss, debuff_eject_conflict_miss, "%32d");
+  stat_reg_int(sdb, "debuff_eject_mispred",
+	       "Incorrect prediction decompression buffer entries tossed out",
+	       &debuff_eject_mispred, debuff_eject_mispred, "%32d");
+
+  stat_reg_int(sdb, "debuff_eject_conflictmiss",
+	       "Buffer entries that missed that cache",
+	       &debuff_eject_conflictmiss, debuff_eject_conflictmiss, "%32d");
+
+  stat_reg_int(sdb, "debuff_eject_lsq_squash",
+	       "Squashed LSQ loads ejected",
+	       &debuff_eject_lsq_squash, debuff_eject_lsq_squash, "%32d");
 
 }
 
@@ -846,8 +867,10 @@ void cp_debuff_queue_addNode (struct cache_t *cp, struct debuff_queue* in, md_ad
     {
       // count ejections from table
       if (tmp->state == 0) debuff_eject_unread++;
-      if (tmp->state == 1) debuff_eject_read++;
-      if (tmp->state == 2) debuff_eject_conflict_miss++;
+      if (tmp->state == 1) debuff_eject_goodpred++;
+      if (tmp->state == 2) debuff_eject_mispred++;
+      if (tmp->state == 3) debuff_eject_conflictmiss++;
+      if (tmp->state == 4) debuff_eject_lsq_squash++;
     }
 
     tmp->pc = pc_in;
@@ -1053,6 +1076,7 @@ else if ( !strcmp(cp->name, "dl2") )
 md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
 
   md_addr_t addr = 0;
+  int hit = 0;
 
   if (PREFETCH_TABLE_TYPE == 0)
     {
@@ -1066,12 +1090,19 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
 
       struct pf_last_blk *blk;
       int set = pc & last->nsets-1;
+      md_addr_t tag = pc & ~(last->nsets-1);
 
       for (blk=last->sets[set].way_head; blk; blk=blk->way_next)
         {
-          if ( blk->tag == (pc & ~(last->nsets-1)) ) addr = blk->addr;
-          break;
+          if ( blk->tag == tag ) {
+            addr = blk->addr;
+            hit = 1;
+            break;
+          }
         }
+
+      if (hit) ld_fetch_hit++;
+      else ld_fetch_miss++;
 
       // power
       pf_sim_tag_static_power = sim_cycle_in * pf_cacti_tag_static_power;
@@ -1116,9 +1147,7 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
       
 
     }
-
-return addr;
-
+  return addr;
 }
 
 
@@ -1129,6 +1158,7 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
   tmp = &dc_buffer;
   int hit = 0, lat = 0;
   int decomp_remaining = 0;
+ 
 
   if (PREFETCH_TABLE_TYPE == 0)
     {
@@ -1142,25 +1172,34 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
 
       struct pf_last_blk *blk;
       int set = pc & last->nsets-1;
+      md_addr_t tag = pc & ~(last->nsets-1);
 
       for (node=tmp->head; node; node=node->next) {
- //TODO try to determine which are mispredictions and which are tossed out due to overflow
-        if ( (node->addr) == (addr) && node->state == 0) {
-          node->state = 1;
-          hit = 1;
-          decomp_remaining = cycle > node->rdy ? 0 : node->rdy - cycle;
+
+
+        if ( (node->pc) == (pc) && node->state == 0) {      
+          if ( (node->addr) == (addr) ) {
+            node->state = 1;
+            hit = 1;
+            decomp_remaining = cycle > node->rdy ? 0 : node->rdy - cycle;
+          }
+          else {
+            node->state = 2;
+            hit = 0;
+          }
           break;
         }
+       
       }
 
       if (hit) 
         {
           // Decompression buffer hit
-          lat = DECOMPRESSION_BUFFER_LATENCY + decomp_remaining - cp->hit_latency;
+          if (chit) lat = DECOMPRESSION_BUFFER_LATENCY + decomp_remaining - cp->hit_latency - cp->decompression_latency;
           if (cmiss) 
             {
               // data was knocked off way list in cache since last hit - full latency
-              node->state = 2;
+              node->state = 3;
               lat = DECOMPRESSION_LATENCY;
             }
 
@@ -1234,6 +1273,23 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
     }
 
 return lat;
+
+}
+
+void cp_squash(md_addr_t pc) {
+
+  struct debuff_queue *tmp;
+  struct debuff_queue_node *node;
+  tmp = &dc_buffer;
+
+   for (node=tmp->head; node; node=node->next) {
+
+
+        if ( (node->pc) == (pc) && node->state == 0)       
+            node->state = 4;
+          
+       
+   }
 
 }
 
@@ -3475,7 +3531,6 @@ ruu_commit(void)
 		      lat = cache_access(cache_dl1, Write, (LSQ[LSQ_head].addr&~3), NULL, 4, sim_cycle, NULL, NULL, mem);
 		      if (cache_dl1->misses > tmp_misses_dl1) events |= PEV_CACHEMISS;
 
-
 ////////////////////////////////////////////////////////////////
 //sdrea-end
 
@@ -3638,6 +3693,8 @@ ruu_recover(int branch_index)			/* index of mis-pred branch */
 
 //sdrea-begin
 ////////////////////////////////////////////////////////////////
+
+if ((MD_OP_FLAGS(LSQ[LSQ_index].op) & (F_MEM|F_LOAD)) == (F_MEM|F_LOAD)) cp_squash(LSQ[LSQ_index].PC);
 
 delay_ready_queue_deleteNode_by_rs(&delay_ready_queue, &LSQ[LSQ_index]);
 
@@ -4158,6 +4215,7 @@ ruu_issue(void)
                                  int chit = cache_dl1->compressed_hits > tmp_comp_hits ? 1 : 0;
 
                                  if (cmiss) events |= PEV_CACHEMISS;
+                                 if (chit) count_comp_hits++;
 
                                  load_lat += cp_prefetch(cache_dl1, rs->PC, rs->addr, sim_cycle, cmiss, chit);
 			                                       
@@ -5305,7 +5363,8 @@ struct RUU_station *tmp_rs;
       /* decode the inst */
       MD_SET_OPCODE(op, inst);
 
-      md_addr_t cp_addr = NULL; //sdrea
+      md_addr_t cp_addr = 0; //sdrea
+
       if ( ( MD_OP_FLAGS(op) & (F_MEM|F_LOAD) ) == (F_MEM|F_LOAD) ) cp_addr = cp_table_check(regs.regs_PC, sim_cycle); //sdrea
       if ( cp_addr ) cp_debuff_queue_addNode ( cache_dl1, &dc_buffer, regs.regs_PC, cp_addr, sim_cycle ); //sdrea
 
@@ -6240,10 +6299,12 @@ sim_main(void)
 ////////////////////////////////////////////////////////////////
 
 delay_ready_queue_initial(&delay_ready_queue);
-debuff_queue_initial(&dc_buffer, 16);
+debuff_queue_initial(&dc_buffer, 2);
 
 count_comp_hits = 0;
 pf_table_writes = 0;
+ld_fetch_hit = 0;
+ld_fetch_miss = 0;
 
 pf_table_reads = 0;
 pf_table_hits = 0;
