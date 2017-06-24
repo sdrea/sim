@@ -148,6 +148,8 @@ static int DECODE_LATENCY_OPTION;
 static int WRITEBACK_TO_DECODE_LATENCY_OPTION;
 static int WRITEBACK_TO_COMMIT_LATENCY_OPTION;
 
+
+
 counter_t count_comp_hits;
 counter_t pf_table_writes;
 counter_t ld_fetch_hit;
@@ -174,6 +176,9 @@ static double pf_cacti_data_read_dynamic_energy;
 static double pf_cacti_data_write_dynamic_energy;
 
 static int DECOMPRESSION_BUFFER_LATENCY;
+static int DECOMPRESSION_BUFFER_SIZE;
+
+
 static double pf_cacti_buf_static_power;
 static double pf_cacti_buf_read_dynamic_energy;
 static double pf_cacti_buf_write_dynamic_energy;
@@ -516,6 +521,11 @@ void cp_options (struct opt_odb_t *odb) {
 
  opt_reg_int(odb, "-pf:buf:lat", "Prefetch Buffer Latency",
 	      &DECOMPRESSION_BUFFER_LATENCY, /* default */1,
+	      /* print */TRUE, /* format */NULL);
+
+
+ opt_reg_int(odb, "-pf:buf:size", "Prefetch Buffer Size",
+	      &DECOMPRESSION_BUFFER_SIZE, /* default */1,
 	      /* print */TRUE, /* format */NULL);
 
  opt_reg_int(odb, "-pf:decomp:lat", "Decompression Latency",
@@ -6299,7 +6309,7 @@ sim_main(void)
 ////////////////////////////////////////////////////////////////
 
 delay_ready_queue_initial(&delay_ready_queue);
-debuff_queue_initial(&dc_buffer, 2);
+debuff_queue_initial(&dc_buffer, DECOMPRESSION_BUFFER_SIZE);
 
 count_comp_hits = 0;
 pf_table_writes = 0;
