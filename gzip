@@ -1,5 +1,5 @@
 SIM_PATH=/home/sdrea/sim/sim-outorder
-CFG_PATH=/home/sdrea/sim/config/last64.cfg
+CFG_PATH=/home/sdrea/sim/config/2level64.cfg
 INT=1000000
 SP=305
 

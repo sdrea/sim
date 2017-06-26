@@ -157,8 +157,15 @@ counter_t ld_fetch_miss;
 
 counter_t pf_table_reads;
 counter_t pf_table_hits;
+
 counter_t pf_last_correct;
+counter_t pf_last_incorrect;
+
 counter_t pf_stride_correct;
+counter_t pf_stride_incorrect;
+
+counter_t pf_stride_max;
+
 counter_t pf_no_correct;
 
 
@@ -167,6 +174,10 @@ static int PREFETCH_TABLE_SETS;
 static int PREFETCH_TABLE_ASSOC;
 static int PREFETCH_TABLE_DELAY;
 static int DECOMPRESSION_LATENCY;
+
+static int PATTERNENTRIES;
+static int TWOLEVELBITS;
+static int TWOLEVELTHRESH;
 
 static double pf_cacti_tag_static_power;
 static double pf_cacti_tag_read_dynamic_energy;
@@ -532,6 +543,19 @@ void cp_options (struct opt_odb_t *odb) {
 	      &DECOMPRESSION_LATENCY, /* default */0,
 	      /* print */TRUE, /* format */NULL);
 
+ opt_reg_int(odb, "-2lp", "Two-level pattern entries",
+	      &PATTERNENTRIES, /* default */4,
+	      /* print */TRUE, /* format */NULL);
+
+ opt_reg_int(odb, "-2lb", "Two-level bits",
+	      &TWOLEVELBITS, /* default */1,
+	      /* print */TRUE, /* format */NULL);
+
+ opt_reg_int(odb, "-2lt", "Two-level threshold",
+	      &TWOLEVELTHRESH, /* default */3,
+	      /* print */TRUE, /* format */NULL);
+
+
   opt_reg_double(odb, "-pf:buf:static-power",
                 "pf buf leakage power (static power) (mW)",
                 &pf_cacti_buf_static_power, 0, TRUE, NULL);
@@ -576,9 +600,23 @@ void cp_stats (struct stat_sdb_t *sdb) {
   stat_reg_int(sdb, "pf_last_correct",
 	       "prefetch last table correct predictions",
 	       &pf_last_correct, pf_last_correct, "%32d");
+
   stat_reg_int(sdb, "pf_stride_correct",
 	       "prefetch stride table correct predictions",
 	       &pf_stride_correct, pf_stride_correct, "%32d");
+
+  stat_reg_int(sdb, "pf_last_incorrect",
+	       "prefetch last table correct predictions",
+	       &pf_last_incorrect, pf_last_incorrect, "%32d");
+
+  stat_reg_int(sdb, "pf_stride_incorrect",
+	       "prefetch stride table correct predictions",
+	       &pf_stride_incorrect, pf_stride_incorrect, "%32d");
+
+  stat_reg_int(sdb, "pf_stride_max",
+	       "prefetch stride table correct predictions",
+	       &pf_stride_max, pf_stride_max, "%32d");
+
   stat_reg_int(sdb, "pf_no_correct",
 	       "prefetch no table correct predictions",
 	       &pf_no_correct, pf_no_correct, "%32d");
@@ -714,6 +752,173 @@ struct pf_last_table* pf_last_table_init()
 
 }
 
+
+//// 2LEVEL
+
+struct pf_pht_blk
+{
+  struct pf_pht_blk *way_next;
+  struct pf_pht_blk *way_prev;
+  int pattern0;
+  int pattern1;
+  int pattern2;
+  int pattern3;
+
+};
+
+struct pf_pht_set
+{
+  struct pf_pht_blk *way_head;
+  struct pf_pht_blk *way_tail;
+  struct pf_pht_blk *blks;
+};
+
+struct pf_pht_table
+{
+  struct pf_pht_set sets[1];
+};
+
+struct pf_pht_table *pht;
+
+struct pf_pht_table* pf_pht_table_init()
+{
+  struct pf_pht_table *table;
+  struct pf_pht_blk *blk;
+  int i, j;
+
+    table = (struct pf_pht_table *) calloc(1, sizeof(struct pf_pht_table) + ((2 << (PATTERNENTRIES*TWOLEVELBITS-1)) - 1)*sizeof(struct pf_pht_set));
+    if (!table) fatal("out of virtual memory");
+
+    for (i=0; i< (2 << (PATTERNENTRIES*TWOLEVELBITS-1)); i++)
+    {
+      table->sets[i].way_head = NULL;
+      table->sets[i].way_tail = NULL;
+      table->sets[i].blks = (struct pf_pht_blk *) calloc(1, (sizeof(struct pf_pht_blk)));
+      if (!table->sets[i].blks) fatal("out of virtual memory");
+
+      table->sets[i].way_head = table->sets[i].blks;
+      blk=table->sets[i].way_head;
+      blk->way_prev = NULL;
+      blk->way_next = NULL;
+
+      blk->pattern0 = 0;
+      blk->pattern1 = 0;
+      blk->pattern2 = 0;
+      blk->pattern3 = 0;
+
+      /*for (j=1; j<1; j++)
+      {
+        blk->way_next = blk + 1;
+        blk = blk->way_next;
+
+        blk->way_prev = blk - 1;
+        blk->way_next = NULL;
+
+        blk->pattern0 = 0;
+        blk->pattern1 = 0;
+        blk->pattern2 = 0;
+        blk->pattern3 = 0;
+
+      }*/
+
+      table->sets[i].way_tail = blk;
+
+    }
+
+    return table;
+
+}
+
+
+
+
+
+struct pf_2level_blk
+{
+  struct pf_2level_blk *way_next;
+  struct pf_2level_blk *way_prev;
+  struct pf_2level_blk *blks;
+  md_addr_t tag; 
+  int LRU;
+  md_addr_t addr0;
+  md_addr_t addr1;
+  md_addr_t addr2;
+  md_addr_t addr3;
+  int pattern;
+};
+
+struct pf_2level_set
+{
+  struct pf_2level_blk *way_head;
+  struct pf_2level_blk *way_tail;
+  struct pf_2level_blk *blks;
+};
+
+struct pf_2level_table
+{
+  int nsets;
+  struct pf_2level_set sets[1];
+};
+
+struct pf_2level_table *twolevel;
+
+
+struct pf_2level_table* pf_2level_table_init()
+{
+  struct pf_2level_table *table;
+  struct pf_2level_blk *blk;
+  int i, j;
+
+    table = (struct pf_2level_table *) calloc(1, sizeof(struct pf_2level_table) + (PREFETCH_TABLE_SETS-1)*sizeof(struct pf_2level_set));
+    if (!table) fatal("out of virtual memory");
+
+    table->nsets = PREFETCH_TABLE_SETS;
+
+    for (i=0; i<table->nsets; i++)
+    {
+      table->sets[i].way_head = NULL;
+      table->sets[i].way_tail = NULL;
+      table->sets[i].blks = (struct pf_2level_blk *) calloc(1, (sizeof(struct pf_2level_blk)));
+      if (!table->sets[i].blks) fatal("out of virtual memory");
+
+      table->sets[i].way_head = table->sets[i].blks;
+      blk=table->sets[i].way_head;
+      blk->way_prev = NULL;
+      blk->way_next = NULL;
+      blk->tag = 0; 
+      blk->LRU = 0;
+      blk->addr0 = 0;
+      blk->addr1 = 0;
+      blk->addr2 = 0;
+      blk->addr3 = 0;
+      blk->pattern = 0;
+
+
+      for (j=1; j<1; j++)
+      {
+        blk->way_next = blk + 1;
+        blk = blk->way_next;
+
+        blk->way_prev = blk - 1;
+        blk->way_next = NULL;
+        blk->tag = 0; 
+        blk->LRU = 0;
+        blk->addr0 = 0;
+        blk->addr1 = 0;
+        blk->addr2 = 0;
+        blk->addr3 = 0;
+        blk->pattern = 0;
+
+      }
+
+      table->sets[i].way_tail = blk;
+
+    }
+
+    return table;
+
+}
+
 //////////////////////////// STRIDE ////////////////////////////
 
 struct pf_stride_blk
@@ -742,6 +947,7 @@ struct pf_stride_table
 };
 
 struct pf_stride_table *stride;
+
 
 struct pf_stride_table* pf_stride_table_init()
 {
@@ -1088,19 +1294,13 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
   md_addr_t addr = 0;
   int hit = 0;
 
-  if (PREFETCH_TABLE_TYPE == 0)
-    {
-      // NO PREFETCHING
-    }
-
   if (PREFETCH_TABLE_TYPE == 1) 
     {
 
       // LAST OUTCOME (LO)
-
       struct pf_last_blk *blk;
       int set = pc & last->nsets-1;
-      md_addr_t tag = pc & ~(last->nsets-1);
+      md_addr_t tag = pc & ~(last->nsets-1);      
 
       for (blk=last->sets[set].way_head; blk; blk=blk->way_next)
         {
@@ -1109,44 +1309,76 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
             hit = 1;
             break;
           }
-        }
-
-      if (hit) ld_fetch_hit++;
-      else ld_fetch_miss++;
-
-      // power
-      pf_sim_tag_static_power = sim_cycle_in * pf_cacti_tag_static_power;
-      pf_sim_data_static_power = sim_cycle_in * pf_cacti_data_static_power;
-      pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
-      if (addr) pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
-
-  }
+        }    
+    }
 
   if (PREFETCH_TABLE_TYPE == 2) 
     {
 
       // STRIDE (S)
+      struct pf_stride_blk *blk;
+      int set = pc & stride->nsets-1;
+      md_addr_t tag = pc & ~(stride->nsets-1);
 
-      
-
+      for (blk=stride->sets[set].way_head; blk; blk=blk->way_next)
+        {
+          if ( blk->tag == tag ) {
+            if (blk->state == 2) { addr = blk->addr + blk->stride;
+            hit = 1; 
+            pf_stride_max = MAX(pf_stride_max, abs(blk->stride));
+            }
+            break;
+          }
+        }
     }
 
   if (PREFETCH_TABLE_TYPE == 3) 
     {
 
-      // TWO LEVEL (2L)
+      // HYBRID S/LO
+      struct pf_stride_blk *blk;
+      int set = pc & stride->nsets-1;
+      md_addr_t tag = pc & ~(stride->nsets-1);     
 
-      
+      for (blk=stride->sets[set].way_head; blk; blk=blk->way_next)
+        {
+          if ( blk->tag == tag ) {
+            if (blk->state == 2) { addr = blk->addr + blk->stride;
+            pf_stride_max = MAX(pf_stride_max, abs(blk->stride));
+            }
+            else addr = blk->addr;
+            hit = 1;
 
+            break;
+          }
+        }
     }
 
   if (PREFETCH_TABLE_TYPE == 4) 
     {
 
-      // HYBRID S/LO
+      // TWO LEVEL (2L)
+      struct pf_2level_blk *blk;
+      struct pf_pht_blk *blk2;
+      int pattern;
+      int set = pc & twolevel->nsets-1;
+      md_addr_t tag = pc & ~(twolevel->nsets-1);     
 
-      
 
+
+      for (blk=twolevel->sets[set].way_head; blk; blk=blk->way_next)
+        {
+          if ( blk->tag == tag ) {
+            pattern = blk->pattern;
+            blk2=pht->sets[pattern].way_head;
+            if (blk2->pattern0 > TWOLEVELTHRESH) addr = blk->addr0;
+            else if (blk2->pattern1 > TWOLEVELTHRESH) addr = blk->addr1;
+            else if (blk2->pattern2 > TWOLEVELTHRESH) addr = blk->addr2;
+            else if (blk2->pattern3 > TWOLEVELTHRESH) addr = blk->addr3;
+            if (addr) hit = 1;
+            break;
+          }
+        }
     }
 
   if (PREFETCH_TABLE_TYPE == 5) 
@@ -1157,6 +1389,18 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
       
 
     }
+
+
+
+  if (hit) ld_fetch_hit++;
+  else ld_fetch_miss++;
+
+  // power
+  pf_sim_tag_static_power = sim_cycle_in * pf_cacti_tag_static_power;
+  pf_sim_data_static_power = sim_cycle_in * pf_cacti_data_static_power;
+  pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
+  if (addr) pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
+
   return addr;
 }
 
@@ -1246,30 +1490,340 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
         }
     }
 
-  if (PREFETCH_TABLE_TYPE == 2) 
+  if ( PREFETCH_TABLE_TYPE == 2 || PREFETCH_TABLE_TYPE == 3 ) 
     {
 
-      // STRIDE (S)
+      // STRIDE (S) and HYBRID (S/LO)
 
-      
+      struct pf_stride_blk *blk;
+      int set = pc & stride->nsets-1;
+      md_addr_t tag = pc & ~(stride->nsets-1);
 
-    }
+      for (node=tmp->head; node; node=node->next) {
 
-  if (PREFETCH_TABLE_TYPE == 3) 
-    {
 
-      // TWO LEVEL (2L)
+        if ( (node->pc) == (pc) && node->state == 0) {      
+          if ( (node->addr) == (addr) ) {
+            node->state = 1;
+            hit = 1;
+            decomp_remaining = cycle > node->rdy ? 0 : node->rdy - cycle;
+          }
+          else {
+            node->state = 2;
+            hit = 0;
+          }
+          break;
+        }
+      }
 
-      
+     //If tag is in prefetch table, update strides
+     //Stride State Machine Update   
+     blk=stride->sets[set].way_tail;
+     if (blk->tag == tag) {
 
+              if (blk->state == 0) {
+                blk->stride = addr - blk->addr;
+                blk->addr = addr;
+                blk->state = 1;
+              }
+              else if (blk->state == 1) {
+                if (blk->stride == (addr - blk->addr)) {
+                  blk->stride = addr - blk->addr;
+                  blk->addr = addr;
+                  blk->state = 2; 
+                }
+                else {
+                  blk->stride = addr - blk->addr;
+                  blk->addr = addr;
+                  blk->state = 1; 
+                }
+
+              }
+              else if (blk->state == 2) {
+                if (blk->stride == (addr - blk->addr)) {
+                  blk->stride = addr - blk->addr;
+                  blk->addr = addr;
+                  blk->state = 2; 
+                }
+                else {
+                  blk->stride = addr - blk->addr;
+                  blk->addr = addr;
+                  blk->state = 1; 
+                }
+              }
+     }
+
+
+      if (hit) 
+        {
+          // Decompression buffer hit
+          if (chit) lat = DECOMPRESSION_BUFFER_LATENCY + decomp_remaining - cp->hit_latency - cp->decompression_latency;
+          if (cmiss) 
+            {
+              // data was knocked off way list in cache since last hit - full latency
+              node->state = 3;
+              lat = DECOMPRESSION_LATENCY;
+            }
+
+          //power
+          pf_sim_buf_static_power = cycle * pf_cacti_buf_static_power;
+          pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
+        }
+
+      // Update prefetch table if compressed hit
+      if (chit) 
+        {
+
+          blk=stride->sets[set].way_tail;
+
+          if (!(blk->tag == tag)) {
+            blk->tag = pc & ~(stride->nsets-1);
+            blk->addr = addr;
+            blk->state = 0;
+            blk->stride = 0;
+          } 
+
+          /*if (last->assoc > 1) 
+            {
+              blk->way_next = last->sets[set].way_head;
+              last->sets[set].way_tail = blk->way_prev;
+              blk->way_prev->way_next = NULL;
+              blk->way_prev = NULL;
+              last->sets[set].way_head = blk;
+              blk=blk->way_next;
+              blk->way_prev = last->sets[set].way_head;
+            }*/
+
+          // power
+          pf_sim_tag_static_power = cycle * pf_cacti_tag_static_power;
+          pf_sim_data_static_power = cycle * pf_cacti_data_static_power;
+          pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
+          pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
+
+        }
     }
 
   if (PREFETCH_TABLE_TYPE == 4) 
     {
 
-      // HYBRID S/LO
+      // TWO LEVEL (2L)
 
-      
+      struct pf_2level_blk *blk;
+      struct pf_pht_blk *blk2;
+      int set = pc & twolevel->nsets-1;
+      md_addr_t tag = pc & ~(twolevel->nsets-1);
+
+      for (node=tmp->head; node; node=node->next) {
+
+
+        if ( (node->pc) == (pc) && node->state == 0) {      
+          if ( (node->addr) == (addr) ) {
+            node->state = 1;
+            hit = 1;
+            decomp_remaining = cycle > node->rdy ? 0 : node->rdy - cycle;
+          }
+          else {
+            node->state = 2;
+            hit = 0;
+          }
+          break;
+        }
+      }
+
+     //If tag is in prefetch table, update pattern
+     //Stride State Machine Update   
+     blk=twolevel->sets[set].way_tail;
+     blk2=pht->sets[blk->pattern].way_tail;
+     if (blk->tag == tag) {
+
+     if (TWOLEVELBITS == 1) {
+
+       if (addr == blk->addr0) 
+         {
+           if (1){ blk2->pattern0++;
+           blk2->pattern1--;}
+
+           blk->LRU = 0;
+           blk->pattern = (blk->pattern << 1) & (15);
+         }
+
+       else if (addr == blk->addr1) 
+         {
+           if (1) {blk2->pattern1++;
+           blk2->pattern0--;}
+
+           blk->LRU = 1;
+           blk->pattern = ((blk->pattern << 1) + 1) & (15);
+         }
+
+       else 
+         {
+           if (blk->LRU == 0) {
+           blk->LRU = 1;
+           blk->addr1 = addr;
+           blk->pattern = ((blk->pattern << 1) + 1) & (15);
+           }
+           if (blk->LRU == 1) {
+           blk->LRU = 0;
+           blk->addr0 = addr;
+           blk->pattern = (blk->pattern << 1) & (15);
+           }
+         }
+
+       }
+
+     else if (TWOLEVELBITS == 2) {
+
+       int LRU1 = blk->LRU & 3;
+       int LRU2 = (blk->LRU & 12) >> 2;
+       int LRU3 = (blk->LRU & 48) >> 4;
+       int LRU4 = (blk->LRU & 192) >> 6;
+
+       if (addr == blk->addr0) 
+         {
+           if (1){ 
+           blk2->pattern0 += 3;
+           blk2->pattern1--;
+           blk2->pattern2--;
+           blk2->pattern3--;
+           }
+
+           if (LRU1 == 0) blk->LRU = blk->LRU;
+           if (LRU2 == 0) blk->LRU = (blk->LRU & 192) + (blk->LRU & 48) + ((blk->LRU & 3) << 2) + 0;
+           if (LRU3 == 0) blk->LRU = (blk->LRU & 192) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 0;
+           if (LRU4 == 0) blk->LRU = ((blk->LRU & 48) << 2) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 0;
+
+           blk->pattern = (blk->pattern << 2) & (255);
+         }
+
+       else if (addr == blk->addr1) 
+         {
+           if (1){ 
+           blk2->pattern0--;
+           blk2->pattern1 += 3;
+           blk2->pattern2--;
+           blk2->pattern3--;
+           }
+
+           if (LRU1 == 1) blk->LRU = blk->LRU;
+           if (LRU2 == 1) blk->LRU = (blk->LRU & 192) + (blk->LRU & 48) + ((blk->LRU & 3) << 2) + 1;
+           if (LRU3 == 1) blk->LRU = (blk->LRU & 192) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 1;
+           if (LRU4 == 1) blk->LRU = ((blk->LRU & 48) << 2) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 1;
+
+           blk->pattern = ((blk->pattern << 2) + 1) & (255);
+         }
+       else if (addr == blk->addr2) 
+         {
+           if (1){ 
+           blk2->pattern0--;
+           blk2->pattern1--;
+           blk2->pattern2 += 3;
+           blk2->pattern3--;
+           }
+
+           if (LRU1 == 2) blk->LRU = blk->LRU;
+           if (LRU2 == 2) blk->LRU = (blk->LRU & 192) + (blk->LRU & 48) + ((blk->LRU & 3) << 2) + 2;
+           if (LRU3 == 2) blk->LRU = (blk->LRU & 192) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 2;
+           if (LRU4 == 2) blk->LRU = ((blk->LRU & 48) << 2) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 2;
+
+           blk->pattern = ((blk->pattern << 2) + 2) & (255);
+         }
+       else if (addr == blk->addr3) 
+         {
+           if (1){ 
+           blk2->pattern0--;
+           blk2->pattern1--;
+           blk2->pattern2--;
+           blk2->pattern3 += 3;
+           }
+
+           if (LRU1 == 3) blk->LRU = blk->LRU;
+           if (LRU2 == 3) blk->LRU = (blk->LRU & 192) + (blk->LRU & 48) + ((blk->LRU & 3) << 2) + 3;
+           if (LRU3 == 3) blk->LRU = (blk->LRU & 192) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 3;
+           if (LRU4 == 3) blk->LRU = ((blk->LRU & 48) << 2) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 3;
+
+           blk->pattern = ((blk->pattern << 2) + 3) & (255);
+         }
+
+       else 
+         {
+           if (LRU4 == 0) {
+           blk->LRU = ((blk->LRU & 48) << 2) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 0;
+           blk->addr0 = addr;
+           blk->pattern = ((blk->pattern << 2) + 0) & (255);
+           }
+           if (LRU4 == 1) {
+           blk->LRU = ((blk->LRU & 48) << 2) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 1;
+           blk->addr1 = addr;
+           blk->pattern = ((blk->pattern << 2) + 1) & (255);
+           }
+           if (LRU4 == 2) {
+           blk->LRU = ((blk->LRU & 48) << 2) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 2;
+           blk->addr2 = addr;
+           blk->pattern = ((blk->pattern << 2) + 2) & (255);
+           }
+           if (LRU4 == 3) {
+           blk->LRU = ((blk->LRU & 48) << 2) + ((blk->LRU & 12) << 2) + ((blk->LRU & 3) << 2) + 3;
+           blk->addr3 = addr;
+           blk->pattern = ((blk->pattern << 2) + 3) & (255);
+           }
+         }
+
+       }
+
+     }
+
+
+      if (hit) 
+        {
+          // Decompression buffer hit
+          if (chit) lat = DECOMPRESSION_BUFFER_LATENCY + decomp_remaining - cp->hit_latency - cp->decompression_latency;
+          if (cmiss) 
+            {
+              // data was knocked off way list in cache since last hit - full latency
+              node->state = 3;
+              lat = DECOMPRESSION_LATENCY;
+            }
+
+          //power
+          pf_sim_buf_static_power = cycle * pf_cacti_buf_static_power;
+          pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
+        }
+
+      // Update prefetch table if compressed hit
+      if (chit) 
+        {
+
+          blk=twolevel->sets[set].way_tail;
+
+          if (!(blk->tag == tag)) {
+            blk->tag = pc & ~(twolevel->nsets-1);
+            blk->LRU = 192+32+4;
+            blk->addr0 = addr;
+            blk->addr1 = 0;
+            blk->addr2 = 0;
+            blk->addr3 = 0;
+            blk->pattern = 0;
+          } 
+
+          /*if (last->assoc > 1) 
+            {
+              blk->way_next = last->sets[set].way_head;
+              last->sets[set].way_tail = blk->way_prev;
+              blk->way_prev->way_next = NULL;
+              blk->way_prev = NULL;
+              last->sets[set].way_head = blk;
+              blk=blk->way_next;
+              blk->way_prev = last->sets[set].way_head;
+            }*/
+
+          // power
+          pf_sim_tag_static_power = cycle * pf_cacti_tag_static_power;
+          pf_sim_data_static_power = cycle * pf_cacti_data_static_power;
+          pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
+          pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
+
+        }
 
     }
 
@@ -6320,10 +6874,16 @@ pf_table_reads = 0;
 pf_table_hits = 0;
 pf_last_correct = 0;
 pf_stride_correct = 0;
+pf_last_incorrect = 0;
+pf_stride_incorrect = 0;
+pf_stride_max = 0;
 pf_no_correct = 0;
 
 if (PREFETCH_TABLE_TYPE == 1) last = pf_last_table_init();
-if (PREFETCH_TABLE_TYPE == 2) stride = pf_stride_table_init();
+if (PREFETCH_TABLE_TYPE == 2 || PREFETCH_TABLE_TYPE == 3) stride = pf_stride_table_init();
+if (PREFETCH_TABLE_TYPE == 4) twolevel = pf_2level_table_init();
+if (PREFETCH_TABLE_TYPE == 4) pht = pf_pht_table_init();
+//if (PREFETCH_TABLE_TYPE == 5) hybrid2 = pf_2ls_table_init();
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
