@@ -1515,8 +1515,12 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
   int hit = 0, lat = 0;
   int decomp_remaining = 0;
 
+  if (PREFETCH_TABLE_TYPE)
+    {
           pf_sim_buftag_static_power = cycle * pf_cacti_buftag_static_power;
           pf_sim_buftag_read_dynamic_energy += pf_cacti_buftag_read_dynamic_energy;
+    }
+
  
 
   if (PREFETCH_TABLE_TYPE == 0)
