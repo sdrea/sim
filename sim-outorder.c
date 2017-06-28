@@ -1385,7 +1385,28 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
     {
 
       // HYBRID 2L/S
+      struct pf_2level_blk *blk;
+      struct pf_pht_blk *blk2;
+      struct pf_stride_blk *blk3;
+      int pattern;
+      int set = pc & twolevel->nsets-1;
+      md_addr_t tag = pc & ~(twolevel->nsets-1);     
 
+      for (blk=twolevel->sets[set].way_head; blk; blk=blk->way_next)
+        {
+          if ( blk->tag == tag ) {
+            pattern = blk->pattern;
+            blk2=pht->sets[pattern].way_head;
+            blk3=stride->sets[set].way_head;
+            if (blk2->pattern0 > TWOLEVELTHRESH) addr = blk->addr0;
+            else if (blk2->pattern1 > TWOLEVELTHRESH) addr = blk->addr1;
+            else if (blk2->pattern2 > TWOLEVELTHRESH) addr = blk->addr2;
+            else if (blk2->pattern3 > TWOLEVELTHRESH) addr = blk->addr3;
+            else if (blk3->state == 2) addr = blk3->addr + blk3->stride;
+            if (addr) hit = 1;
+            break;
+          }
+        }
       
 
     }
@@ -1603,13 +1624,15 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
         }
     }
 
-  if (PREFETCH_TABLE_TYPE == 4) 
+  if (PREFETCH_TABLE_TYPE == 4 | PREFETCH_TABLE_TYPE == 5) 
     {
 
       // TWO LEVEL (2L)
 
       struct pf_2level_blk *blk;
       struct pf_pht_blk *blk2;
+      struct pf_stride_blk *blk3;
+
       int set = pc & twolevel->nsets-1;
       md_addr_t tag = pc & ~(twolevel->nsets-1);
 
@@ -1632,6 +1655,45 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
 
      //If tag is in prefetch table, update pattern
      //Stride State Machine Update   
+     if (PREFETCH_TABLE_TYPE == 5) {
+
+       blk3=stride->sets[set].way_tail;
+
+       if (blk3->tag == tag) {
+         if (blk3->state == 0) {
+           blk3->stride = addr - blk3->addr;
+           blk3->addr = addr;
+           blk3->state = 1;
+         }
+         else if (blk3->state == 1) {
+           if (blk3->stride == (addr - blk3->addr)) {
+             blk3->stride = addr - blk3->addr;
+             blk3->addr = addr;
+             blk3->state = 2; 
+           }
+           else {
+             blk3->stride = addr - blk3->addr;
+             blk3->addr = addr;
+             blk3->state = 1; 
+           }
+         }
+         else if (blk3->state == 2) {
+           if (blk3->stride == (addr - blk3->addr)) {
+             blk3->stride = addr - blk3->addr;
+             blk3->addr = addr;
+             blk3->state = 2; 
+           }
+           else {
+             blk3->stride = addr - blk3->addr;
+             blk3->addr = addr;
+             blk3->state = 1; 
+           }
+         }
+       }
+     }
+
+// Update patterns
+
      blk=twolevel->sets[set].way_tail;
      blk2=pht->sets[blk->pattern].way_tail;
      if (blk->tag == tag) {
@@ -1794,6 +1856,19 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
       if (chit) 
         {
 
+          if (PREFETCH_TABLE_TYPE == 5) {
+
+            blk3=stride->sets[set].way_tail;
+
+            if (!(blk3->tag == tag)) {
+              blk3->tag = pc & ~(stride->nsets-1);
+              blk3->addr = addr;
+              blk3->state = 0;
+              blk3->stride = 0;
+            } 
+
+          }
+
           blk=twolevel->sets[set].way_tail;
 
           if (!(blk->tag == tag)) {
@@ -1824,15 +1899,6 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
           pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
 
         }
-
-    }
-
-  if (PREFETCH_TABLE_TYPE == 5) 
-    {
-
-      // HYBRID 2L/S
-
-      
 
     }
 
@@ -6879,11 +6945,10 @@ pf_stride_incorrect = 0;
 pf_stride_max = 0;
 pf_no_correct = 0;
 
-if (PREFETCH_TABLE_TYPE == 1) last = pf_last_table_init();
-if (PREFETCH_TABLE_TYPE == 2 || PREFETCH_TABLE_TYPE == 3) stride = pf_stride_table_init();
-if (PREFETCH_TABLE_TYPE == 4) twolevel = pf_2level_table_init();
-if (PREFETCH_TABLE_TYPE == 4) pht = pf_pht_table_init();
-//if (PREFETCH_TABLE_TYPE == 5) hybrid2 = pf_2ls_table_init();
+last = pf_last_table_init();
+stride = pf_stride_table_init();
+twolevel = pf_2level_table_init();
+pht = pf_pht_table_init();
 
 ////////////////////////////////////////////////////////////////
 //sdrea-end
