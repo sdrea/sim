@@ -194,6 +194,10 @@ static double pf_cacti_buf_static_power;
 static double pf_cacti_buf_read_dynamic_energy;
 static double pf_cacti_buf_write_dynamic_energy;
 
+static double pht_cacti_static_power;
+static double pht_cacti_read_dynamic_energy;
+static double pht_cacti_write_dynamic_energy;
+
 static double pf_sim_tag_static_power;
 static double pf_sim_tag_read_dynamic_energy;
 static double pf_sim_tag_write_dynamic_energy;
@@ -203,6 +207,10 @@ static double pf_sim_data_write_dynamic_energy;
 static double pf_sim_buf_static_power;
 static double pf_sim_buf_read_dynamic_energy;
 static double pf_sim_buf_write_dynamic_energy;
+
+static double pht_sim_static_power;
+static double pht_sim_read_dynamic_energy;
+static double pht_sim_write_dynamic_energy;
 
 static int simpoint;
 static int simpoint_interval;
@@ -530,6 +538,23 @@ void cp_options (struct opt_odb_t *odb) {
                 "pf data dynamic write energy per access (nJ)",
                 &pf_cacti_data_write_dynamic_energy, 0, TRUE, NULL);
 
+
+
+  opt_reg_double(odb, "-pht:static-power",
+                "pht leakage power (static power) (mW)",
+                &pht_cacti_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pht:read-dynamic-energy",
+                "pht dynamic read energy per access (nJ)",
+                &pht_cacti_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pht:write-dynamic-energy",
+                "pht dynamic write energy per access (nJ)",
+                &pht_cacti_write_dynamic_energy, 0, TRUE, NULL);
+
+
+
+
  opt_reg_int(odb, "-pf:buf:lat", "Prefetch Buffer Latency",
 	      &DECOMPRESSION_BUFFER_LATENCY, /* default */1,
 	      /* print */TRUE, /* format */NULL);
@@ -656,6 +681,22 @@ void cp_stats (struct stat_sdb_t *sdb) {
   stat_reg_double(sdb, "pf_sim_buf_write_dynamic_energy",
                "PFTable Cache buf Dynamic Write Energy (nJ)", 
 	&pf_sim_buf_write_dynamic_energy, 0, "%21.6f");
+
+
+
+  stat_reg_double(sdb, "pht_sim_static_power",
+               "PHT Leakage Power (mW-cycles)", 
+	&pht_sim_static_power, 0, "%29.6f");
+
+  stat_reg_double(sdb, "pht_sim_read_dynamic_energy",
+               "PHT Dynamic Read Energy (nJ)", 
+	&pht_sim_read_dynamic_energy, 0, "%22.6f");
+
+  stat_reg_double(sdb, "pht_sim_write_dynamic_energy",
+               "PHT Dynamic Write Energy (nJ)", 
+	&pht_sim_write_dynamic_energy, 0, "%21.6f");
+
+
 
   stat_reg_int(sdb, "debuff_eject_unread",
 	       "Unread decompression buffer entries tossed out",
@@ -1421,6 +1462,11 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
   pf_sim_data_static_power = sim_cycle_in * pf_cacti_data_static_power;
   pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
   if (addr) pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
+  if (PREFETCH_TABLE_TYPE == 4 || PREFETCH_TABLE_TYPE == 5) {
+  //PHT Power
+  pht_sim_static_power = sim_cycle_in * pht_cacti_static_power;
+  pht_sim_read_dynamic_energy = sim_cycle_in * pht_cacti_read_dynamic_energy;
+  }
 
   return addr;
 }
@@ -1490,17 +1536,6 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
           blk=last->sets[set].way_tail;
           blk->tag = pc & ~(last->nsets-1);
           blk->addr = addr;
-
-          if (last->assoc > 1) 
-            {
-              blk->way_next = last->sets[set].way_head;
-              last->sets[set].way_tail = blk->way_prev;
-              blk->way_prev->way_next = NULL;
-              blk->way_prev = NULL;
-              last->sets[set].way_head = blk;
-              blk=blk->way_next;
-              blk->way_prev = last->sets[set].way_head;
-            }
 
           // power
           pf_sim_tag_static_power = cycle * pf_cacti_tag_static_power;
@@ -1572,6 +1607,12 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
                   blk->state = 1; 
                 }
               }
+
+          // power
+          pf_sim_tag_static_power = cycle * pf_cacti_tag_static_power;
+          pf_sim_data_static_power = cycle * pf_cacti_data_static_power;
+          pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
+          pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
      }
 
 
@@ -1602,24 +1643,15 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
             blk->addr = addr;
             blk->state = 0;
             blk->stride = 0;
-          } 
-
-          /*if (last->assoc > 1) 
-            {
-              blk->way_next = last->sets[set].way_head;
-              last->sets[set].way_tail = blk->way_prev;
-              blk->way_prev->way_next = NULL;
-              blk->way_prev = NULL;
-              last->sets[set].way_head = blk;
-              blk=blk->way_next;
-              blk->way_prev = last->sets[set].way_head;
-            }*/
+           
 
           // power
           pf_sim_tag_static_power = cycle * pf_cacti_tag_static_power;
           pf_sim_data_static_power = cycle * pf_cacti_data_static_power;
           pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
           pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
+
+          }
 
         }
     }
@@ -1697,6 +1729,16 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
      blk=twolevel->sets[set].way_tail;
      blk2=pht->sets[blk->pattern].way_tail;
      if (blk->tag == tag) {
+
+          // power
+          pf_sim_tag_static_power = cycle * pf_cacti_tag_static_power;
+          pf_sim_data_static_power = cycle * pf_cacti_data_static_power;
+          pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
+          pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
+
+          //PHT Power
+          pht_sim_static_power = cycle * pht_cacti_static_power;
+          pht_sim_write_dynamic_energy = cycle * pht_cacti_write_dynamic_energy;
 
      if (TWOLEVELBITS == 1) {
 
@@ -1879,24 +1921,18 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
             blk->addr2 = 0;
             blk->addr3 = 0;
             blk->pattern = 0;
-          } 
-
-          /*if (last->assoc > 1) 
-            {
-              blk->way_next = last->sets[set].way_head;
-              last->sets[set].way_tail = blk->way_prev;
-              blk->way_prev->way_next = NULL;
-              blk->way_prev = NULL;
-              last->sets[set].way_head = blk;
-              blk=blk->way_next;
-              blk->way_prev = last->sets[set].way_head;
-            }*/
 
           // power
           pf_sim_tag_static_power = cycle * pf_cacti_tag_static_power;
           pf_sim_data_static_power = cycle * pf_cacti_data_static_power;
           pf_sim_tag_write_dynamic_energy += pf_cacti_tag_write_dynamic_energy;
           pf_sim_data_write_dynamic_energy += pf_cacti_data_write_dynamic_energy;
+
+          } 
+
+
+
+
 
         }
 
