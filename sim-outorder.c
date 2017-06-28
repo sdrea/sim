@@ -193,6 +193,9 @@ static int DECOMPRESSION_BUFFER_SIZE;
 static double pf_cacti_buf_static_power;
 static double pf_cacti_buf_read_dynamic_energy;
 static double pf_cacti_buf_write_dynamic_energy;
+static double pf_cacti_buftag_static_power;
+static double pf_cacti_buftag_read_dynamic_energy;
+static double pf_cacti_buftag_write_dynamic_energy;
 
 static double pht_cacti_static_power;
 static double pht_cacti_read_dynamic_energy;
@@ -204,9 +207,13 @@ static double pf_sim_tag_write_dynamic_energy;
 static double pf_sim_data_static_power;
 static double pf_sim_data_read_dynamic_energy;
 static double pf_sim_data_write_dynamic_energy;
+
 static double pf_sim_buf_static_power;
 static double pf_sim_buf_read_dynamic_energy;
 static double pf_sim_buf_write_dynamic_energy;
+static double pf_sim_buftag_static_power;
+static double pf_sim_buftag_read_dynamic_energy;
+static double pf_sim_buftag_write_dynamic_energy;
 
 static double pht_sim_static_power;
 static double pht_sim_read_dynamic_energy;
@@ -593,6 +600,18 @@ void cp_options (struct opt_odb_t *odb) {
                 "pf buf dynamic write energy per access (nJ)",
                 &pf_cacti_buf_write_dynamic_energy, 0, TRUE, NULL);
 
+  opt_reg_double(odb, "-pf:buftag:static-power",
+                "pf buf tag leakage power (static power) (mW)",
+                &pf_cacti_buftag_static_power, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pf:buftag:read:dynamic-energy",
+                "pf buf tag dynamic read energy per access (nJ)",
+                &pf_cacti_buftag_read_dynamic_energy, 0, TRUE, NULL);
+
+  opt_reg_double(odb, "-pf:buftag:write:dynamic-energy",
+                "pf buf tag dynamic write energy per access (nJ)",
+                &pf_cacti_buftag_write_dynamic_energy, 0, TRUE, NULL);
+
 }
 
 void cp_stats (struct stat_sdb_t *sdb) {
@@ -681,6 +700,19 @@ void cp_stats (struct stat_sdb_t *sdb) {
   stat_reg_double(sdb, "pf_sim_buf_write_dynamic_energy",
                "PFTable Cache buf Dynamic Write Energy (nJ)", 
 	&pf_sim_buf_write_dynamic_energy, 0, "%21.6f");
+
+
+  stat_reg_double(sdb, "pf_sim_buftag_static_power",
+               "PFTable Cache buf tag Leakage Power (mW-cycles)", 
+	&pf_sim_buftag_static_power, 0, "%29.6f");
+
+  stat_reg_double(sdb, "pf_sim_buftag_read_dynamic_energy",
+               "PFTable Cache buf tag Dynamic Read Energy (nJ)", 
+	&pf_sim_buftag_read_dynamic_energy, 0, "%22.6f");
+
+  stat_reg_double(sdb, "pf_sim_buftag_write_dynamic_energy",
+               "PFTable Cache buf tag Dynamic Write Energy (nJ)", 
+	&pf_sim_buftag_write_dynamic_energy, 0, "%21.6f");
 
 
 
@@ -1148,6 +1180,9 @@ void cp_debuff_queue_addNode (struct cache_t *cp, struct debuff_queue* in, md_ad
   //power
   pf_sim_buf_write_dynamic_energy += pf_cacti_buf_write_dynamic_energy;
   pf_sim_buf_static_power = cycle_in * pf_cacti_buf_static_power;
+
+  pf_sim_buftag_write_dynamic_energy += pf_cacti_buftag_write_dynamic_energy;
+  pf_sim_buftag_static_power = cycle_in * pf_cacti_buftag_static_power;
 }
 
 struct debuff_queue dc_buffer; 
@@ -1479,6 +1514,9 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
   tmp = &dc_buffer;
   int hit = 0, lat = 0;
   int decomp_remaining = 0;
+
+          pf_sim_buftag_static_power = cycle * pf_cacti_buftag_static_power;
+          pf_sim_buftag_read_dynamic_energy += pf_cacti_buftag_read_dynamic_energy;
  
 
   if (PREFETCH_TABLE_TYPE == 0)
@@ -1496,6 +1534,7 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
       md_addr_t tag = pc & ~(last->nsets-1);
 
       for (node=tmp->head; node; node=node->next) {
+
 
 
         if ( (node->pc) == (pc) && node->state == 0) {      
@@ -1525,8 +1564,10 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
             }
 
           //power
-          pf_sim_buf_static_power = cycle * pf_cacti_buf_static_power;
-          pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
+          pf_sim_buf_static_power = cycle * pf_cacti_buftag_static_power;
+          pf_sim_buf_read_dynamic_energy += pf_cacti_buftag_read_dynamic_energy;
+
+
         }
 
       // Update prefetch table if compressed hit
