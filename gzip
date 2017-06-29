@@ -1,5 +1,5 @@
 SIM_PATH=/home/sdrea/sim/sim-outorder
-CFG_PATH=/home/sdrea/sim/config/hybrid2LS64.cfg
+CFG_PATH=/home/sdrea/sim/config/002_CP_LO64_8BUF.cfg
 INT=1000000
 SP=305
 
@@ -11,6 +11,4 @@ $SIM_PATH \
 -simpoint $SP \
 cc1 200.i -o 200.s > /dev/null
 
-#-vcd_path $VCD_PATH \
-#-vcd_suffix $VCD \
 

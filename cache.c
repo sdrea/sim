@@ -997,6 +997,7 @@ if (cmd == Read && cp->bdi_compress && bdi_size != 64) {
     return cp->hit_latency + cp->decompression_latency;
   }
   else {
+    cp->last_compressed_size = 64;
     return cp->hit_latency;
   }
 

@@ -1078,6 +1078,7 @@ struct debuff_queue_node
   md_addr_t addr;
   tick_t rdy;
   int state;
+  int last_compressed_size;
 };
 
 struct debuff_queue
@@ -1107,6 +1108,7 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
     tmp->addr = 0;
     tmp->rdy = 0;
     tmp->state = 0;
+    tmp->last_compressed_size = 0;
   }
   
   if (size > 1) {
@@ -1120,6 +1122,7 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
     tmp->addr = 0;
     tmp->rdy = 0;
     tmp->state = 0;
+    tmp->last_compressed_size = 0;
 
     // Tail
     in->tail = &in->nodes[size-1];
@@ -1130,6 +1133,7 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
     tmp->addr = 0;
     tmp->rdy = 0;
     tmp->state = 0;
+    tmp->last_compressed_size = 0;
  
     for (i = 1; i<size-1; i++) {
 
@@ -1140,6 +1144,7 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
     tmp->addr = 0;
     tmp->rdy = 0;
     tmp->state = 0;
+    tmp->last_compressed_size = 0;
 
     }
 
@@ -1147,9 +1152,10 @@ void debuff_queue_initial(struct debuff_queue* in, int size)
 
 }
 
-void cp_debuff_queue_addNode (struct cache_t *cp, struct debuff_queue* in, md_addr_t pc_in, md_addr_t addr_in, tick_t cycle_in) {
+void cp_debuff_queue_addNode (struct cache_t *cp, struct debuff_queue* in, md_addr_t pc_in, md_addr_t addr_in, tick_t cycle_in, struct mem_t *mem) {
 
   struct debuff_queue_node *tmp;
+  int lat;
   tmp = in->head;
 
   if (tmp->addr) 
@@ -1160,12 +1166,19 @@ void cp_debuff_queue_addNode (struct cache_t *cp, struct debuff_queue* in, md_ad
       if (tmp->state == 2) debuff_eject_mispred++;
       if (tmp->state == 3) debuff_eject_conflictmiss++;
       if (tmp->state == 4) debuff_eject_lsq_squash++;
+
+     // if state was 1, remove extra power calc from cache
+     if (tmp->state == 1) {
+     cp->sim_tag_read_dynamic_energy -= cp->cacti_tag_read_dynamic_energy;
+     cp->sim_data_read_dynamic_energy -= (double) tmp->last_compressed_size / cp->bsize * cp->cacti_data_read_dynamic_energy;
+     }
     }
 
     tmp->pc = pc_in;
     tmp->addr = addr_in;
     tmp->state = 0;
-    tmp->rdy = cycle_in + PREFETCH_TABLE_DELAY + cp->hit_latency + DECOMPRESSION_LATENCY;
+    tmp->rdy = cycle_in + PREFETCH_TABLE_DELAY + cache_access(cp, Read, addr_in & ~63, NULL, 64, cycle_in, NULL, NULL, mem);
+    tmp->last_compressed_size = cp->last_compressed_size;
 
   if (tmp->next) 
     {
@@ -6076,7 +6089,7 @@ struct RUU_station *tmp_rs;
       md_addr_t cp_addr = 0; //sdrea
 
       if ( ( MD_OP_FLAGS(op) & (F_MEM|F_LOAD) ) == (F_MEM|F_LOAD) ) cp_addr = cp_table_check(regs.regs_PC, sim_cycle); //sdrea
-      if ( cp_addr ) cp_debuff_queue_addNode ( cache_dl1, &dc_buffer, regs.regs_PC, cp_addr, sim_cycle ); //sdrea
+      if ( cp_addr ) cp_debuff_queue_addNode ( cache_dl1, &dc_buffer, regs.regs_PC, cp_addr, sim_cycle, mem ); //sdrea
 
       /* compute default next PC */
       regs.regs_NPC = regs.regs_PC + sizeof(md_inst_t);
