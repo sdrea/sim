@@ -1452,6 +1452,8 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
             else if (blk2->pattern2 > TWOLEVELTHRESH) addr = blk->addr2;
             else if (blk2->pattern3 > TWOLEVELTHRESH) addr = blk->addr3;
             if (addr) hit = 1;
+            pht_sim_static_power = sim_cycle_in * pht_cacti_static_power;
+            pht_sim_read_dynamic_energy += pht_cacti_read_dynamic_energy;
             break;
           }
         }
@@ -1480,6 +1482,8 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
             else if (blk2->pattern3 > TWOLEVELTHRESH) addr = blk->addr3;
             else if (blk3->state == 2) addr = blk3->addr + blk3->stride;
             if (addr) hit = 1;
+            pht_sim_static_power = sim_cycle_in * pht_cacti_static_power;
+            pht_sim_read_dynamic_energy += pht_cacti_read_dynamic_energy;      
             break;
           }
         }
@@ -1497,11 +1501,6 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
   pf_sim_data_static_power = sim_cycle_in * pf_cacti_data_static_power;
   pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
   if (addr) pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
-  if (PREFETCH_TABLE_TYPE == 4 || PREFETCH_TABLE_TYPE == 5) {
-  //PHT Power
-  pht_sim_static_power = sim_cycle_in * pht_cacti_static_power;
-  pht_sim_read_dynamic_energy = sim_cycle_in * pht_cacti_read_dynamic_energy;
-  }
 
   return addr;
 }
@@ -1568,8 +1567,8 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
             }
 
           //power
-          pf_sim_buf_static_power = cycle * pf_cacti_buftag_static_power;
-          pf_sim_buf_read_dynamic_energy += pf_cacti_buftag_read_dynamic_energy;
+          pf_sim_buf_static_power = cycle * pf_cacti_buf_static_power;
+          pf_sim_buf_read_dynamic_energy += pf_cacti_buf_read_dynamic_energy;
 
 
         }
@@ -1783,7 +1782,7 @@ int cp_prefetch(struct cache_t *cp, md_addr_t pc, md_addr_t addr, tick_t cycle, 
 
           //PHT Power
           pht_sim_static_power = cycle * pht_cacti_static_power;
-          pht_sim_write_dynamic_energy = cycle * pht_cacti_write_dynamic_energy;
+          pht_sim_write_dynamic_energy +=  pht_cacti_write_dynamic_energy;
 
      if (TWOLEVELBITS == 1) {
 
