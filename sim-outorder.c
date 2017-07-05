@@ -275,8 +275,8 @@ fclose(fp);
 
 strcpy(cp->dVCDname, vcdpath);
 strcat(cp->dVCDname, "d.");
-strcat(cp->cVCDname, cp->name);
-strcat(cp->cVCDname, ".");
+strcat(cp->dVCDname, cp->name);
+strcat(cp->dVCDname, ".");
 strcat(cp->dVCDname, vcd);
 fp = fopen(cp->dVCDname, "w+");
 fprintf(fp, "$date\n");

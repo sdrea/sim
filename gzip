@@ -1,5 +1,5 @@
 SIM_PATH=/home/sdrea/sim/sim-outorder
-CFG_PATH=/home/sdrea/sim/config/002_CP_LO64_8BUF.cfg
+CFG_PATH=/home/sdrea/sim/config/001_CO.cfg
 INT=1000000
 SP=305
 
@@ -10,5 +10,3 @@ $SIM_PATH \
 -interval $INT \
 -simpoint $SP \
 cc1 200.i -o 200.s > /dev/null
-
-
