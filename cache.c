@@ -297,7 +297,7 @@ void cp_cache_reg_stats ( struct cache_t *cp, struct stat_sdb_t *sdb )
 
 }
 
-void cp_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_addr_t addr, tick_t now, byte_t *encode, qword_t *mask) {
+void cp_cache_compress (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_addr_t addr, tick_t now, byte_t *encode, qword_t *mask) {
 
   bool_t zeros = 1, repeats = 1, delta81 = 1, delta82 = 1, delta84 = 1, delta41 = 1, delta42 = 1, delta21 = 1;
   qword_t delta81mask = -1, delta82mask = -1, delta84mask = -1, delta41mask = -1, delta42mask = -1, delta21mask = -1;
@@ -497,6 +497,10 @@ void cp_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_
                 //decompressed
                 bdi_blk_size += 64; // 8 segments, 64 bytes
               break;
+              default:
+                //no data in the "way"
+                bdi_blk_size += 0; // unused way
+              break;
             }
         }
 
@@ -567,7 +571,7 @@ void cp_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_
   cp->sim_tag_static_power += (now - cp->last_cache_access) * cp->cacti_tag_static_power;
   cp->sim_data_static_power += (now - cp->last_cache_access) * cp->cacti_data_static_power;
 
-  // On cache miss, tag read will occur for read and write operation
+  // On cache access, tag read will occur for read and write operation
 
   cp->sim_tag_read_dynamic_energy += cp->cacti_tag_read_dynamic_energy;
 
@@ -578,7 +582,7 @@ void cp_cache_miss (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_
                      cp->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_write_dynamic_energy;
                    }
 
-  // On cache miss, write operation, there will be 1 tag write (plus a dirty bit write), 1 data write, 0 data reads
+  // On cache access, write operation, there will be 1 tag write (plus a dirty bit write), 1 data write, 0 data reads
 
   if (cmd == Write) {
                       cp->sim_tag_write_dynamic_energy += cp->cacti_tag_write_dynamic_energy;
@@ -636,7 +640,7 @@ void cp_update_blk (struct cache_blk_t *blk, byte_t bdi_encode, qword_t bdi_mask
         blk->bdi_mask = (sword_t) bdi_mask;
 }
 
-int cp_cache_hit (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_addr_t addr, tick_t now, struct cache_blk_t *blk) {
+int cp_cache_decompress (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_addr_t addr, tick_t now, struct cache_blk_t *blk) {
 
   signed long long db[64], db8[64];
   signed long db4[64];
@@ -650,9 +654,7 @@ int cp_cache_hit (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem, md_ad
   md_addr_t set = CACHE_SET(cp, addr);
   md_addr_t bofs = CACHE_BLK(cp, addr);
 
-//TODO only do this on read, not write hit, what to do on write?
-
-if (mem != NULL)
+if (mem != NULL && cmd == Read)
     {
         for (i = 0; i < 64; i++)
           {
@@ -966,23 +968,12 @@ if (bdi_size != 64) {
   cp->sim_tag_static_power += (now - cp->last_cache_access) * cp->cacti_tag_static_power;
   cp->sim_data_static_power += (now - cp->last_cache_access) * cp->cacti_data_static_power;
 
-  // On cache hit, tag read will occur for read and write operation
+  // On cache hit, tag and data read will occur for read and write operation
 
   cp->sim_tag_read_dynamic_energy += cp->cacti_tag_read_dynamic_energy;
+  cp->sim_data_read_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_read_dynamic_energy;
 
-  // On cache hit, read operation, there will be 0 tag writes, 0 data writes, 1 data read
 
-  if (cmd == Read) { 
-
-    cp->sim_data_read_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_read_dynamic_energy;
-
-  }
-
-  // On cache hit, write operation, there will be 0 tag writes, 1 data write, 0 data reads
-
-  if (cmd == Write) {
-                      cp->sim_data_write_dynamic_energy += (double) bdi_size / cp->bsize * cp->cacti_data_write_dynamic_energy;
-                    }
 
   cp->last_cache_access = now;
 
@@ -1393,7 +1384,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   md_addr_t tag = CACHE_TAG(cp, addr);
   md_addr_t set = CACHE_SET(cp, addr);
   md_addr_t bofs = CACHE_BLK(cp, addr);
-  struct cache_blk_t *blk, *repl;
+  struct cache_blk_t *blk, *repl, *tmpblk; //sdrea
   int lat = 0;
 
   /* default replacement address */
@@ -1450,7 +1441,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* **MISS** */
   cp->misses++;
 
-  cp_cache_miss(cmd, cp, mem, addr, now, &bdi_encode, &bdi_mask); //sdrea
+  cp_cache_compress(cmd, cp, mem, addr, now, &bdi_encode, &bdi_mask); //sdrea
 
   /* select the appropriate block to replace, and re-link this entry to
      the appropriate place in the way list */
@@ -1545,8 +1536,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* **HIT** */
   cp->hits++;
 
-
-  lat = cp_cache_hit(cmd, cp, mem, addr, now, blk); //sdrea
+  if (cmd == Read) lat = cp_cache_decompress(cmd, cp, mem, addr, now, blk); //sdrea
 
   /* copy data out of cache block, if block exists */
   if (cp->balloc)
@@ -1564,6 +1554,13 @@ cache_access(struct cache_t *cp,	/* cache to access */
       /* move this block to head of the way (MRU) list */
       update_way_list(&cp->sets[set], blk, Head);
     }
+
+  if (cmd == Write) { //sdrea
+  tmpblk = cp->sets[set].way_head; //sdrea
+  tmpblk->bdi_encode = 8; //sdrea invalid, will count as 0
+  cp_cache_compress(cmd, cp, mem, addr, now, &bdi_encode, &bdi_mask); //sdrea
+  cp_update_blk(tmpblk, bdi_encode, bdi_mask);  //sdrea
+  } //sdrea
 
   /* tag is unchanged, so hash links (if they exist) are still valid */
 
@@ -1584,8 +1581,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* **FAST HIT** */
   cp->hits++;
 
-
-  lat = cp_cache_hit(cmd, cp, mem, addr, now, blk); //sdrea
+  if (cmd == Read) lat = cp_cache_decompress(cmd, cp, mem, addr, now, blk); //sdrea
 
   /* copy data out of cache block, if block exists */
   if (cp->balloc)
@@ -1598,6 +1594,13 @@ cache_access(struct cache_t *cp,	/* cache to access */
     blk->status |= CACHE_BLK_DIRTY;
 
   /* this block hit last, no change in the way list */
+
+  if (cmd == Write) { //sdrea
+  tmpblk = cp->sets[set].way_head; //sdrea
+  tmpblk->bdi_encode = 8; //sdrea invalid, will count as 0
+  cp_cache_compress(cmd, cp, mem, addr, now, &bdi_encode, &bdi_mask); //sdrea
+  cp_update_blk(tmpblk, bdi_encode, bdi_mask);  //sdrea
+  } //sdrea
 
   /* tag is unchanged, so hash links (if they exist) are still valid */
 

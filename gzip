@@ -9,4 +9,5 @@ $SIM_PATH \
 -config $CFG_PATH \
 -interval $INT \
 -simpoint $SP \
+-vcd_suffix _VCDSUFFIX \
 cc1 200.i -o 200.s > /dev/null
