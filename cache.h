@@ -269,6 +269,9 @@ struct cache_t
   counter_t size_uncompressed;
   counter_t size_compressed;
 
+  counter_t compressor_accesses;
+  counter_t decompressor_accesses;
+
   char cVCDname[256];
   char dVCDname[256];
 

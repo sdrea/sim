@@ -162,6 +162,9 @@ static char last_dvcdbuf2[516] = "";
 static char last_dvcdbuf3[8] = "";
 static char last_vcdbuf2[516] = "";
 
+
+
+
 FILE *fp;
 
 void cp_init_cache (struct cache_t *cp) {
@@ -196,6 +199,9 @@ cp->count_encode_1111_uncompressed = 0;
 
 cp->size_uncompressed = 0;
 cp->size_compressed = 0;
+
+cp->compressor_accesses = 0;
+cp->decompressor_accesses = 0;
 
 strcpy(cp->cVCDname, "");
 strcpy(cp->dVCDname, "");
@@ -294,6 +300,16 @@ void cp_cache_reg_stats ( struct cache_t *cp, struct stat_sdb_t *sdb )
   sprintf(buf, "%s_size_uncompressed", name);
   sprintf(buf1, "%s Size of uncompressed cache lines", name);
   stat_reg_counter(sdb, buf, buf1, &cp->size_uncompressed, 0, "%32d");
+
+  sprintf(buf, "%s_compressor_accesses", name);
+  sprintf(buf1, "%s Compressor Accesses for dynamic power post processing", name);
+  stat_reg_counter(sdb, buf, buf1, &cp->compressor_accesses, 0, "%32d");
+
+  sprintf(buf, "%s_decompressor_accesses", name);
+  sprintf(buf1, "%s Decompressor Accesses for dynamic power post processing", name);
+  stat_reg_counter(sdb, buf, buf1, &cp->decompressor_accesses, 0, "%32d");
+
+
 
 }
 
@@ -617,6 +633,8 @@ void cp_cache_compress (enum mem_cmd cmd, struct cache_t *cp, struct mem_t *mem,
   fprintf(fp, "\n");
   fclose(fp);
   }
+
+  cp->compressor_accesses++;
 
   }
 
@@ -956,6 +974,8 @@ if (bdi_size != 64) {
   fprintf(fp, "\n");
   fclose(fp);
   }
+
+  cp->decompressor_accesses++;
 
   }
 

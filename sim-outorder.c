@@ -97,8 +97,8 @@ static counter_t debuff_eject_unread;
 static counter_t debuff_eject_goodpred;
 static counter_t debuff_eject_mispred;
 static counter_t debuff_eject_conflictmiss;
-
 static counter_t debuff_eject_lsq_squash;
+
 
 static int il1_bdi_compress;
 static int il1_write_vcd;
@@ -749,6 +749,7 @@ void cp_stats (struct stat_sdb_t *sdb) {
   stat_reg_int(sdb, "debuff_eject_lsq_squash",
 	       "Squashed LSQ loads ejected",
 	       &debuff_eject_lsq_squash, debuff_eject_lsq_squash, "%32d");
+
 
 }
 
@@ -1513,8 +1514,8 @@ md_addr_t cp_table_check (md_addr_t pc, tick_t sim_cycle_in) {
   pf_sim_tag_static_power = sim_cycle_in * pf_cacti_tag_static_power;
   pf_sim_data_static_power = sim_cycle_in * pf_cacti_data_static_power;
   pf_sim_tag_read_dynamic_energy += pf_cacti_tag_read_dynamic_energy;
-  if (addr) pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
-
+  if (addr && (PREFETCH_TABLE_TYPE == 5 || PREFETCH_TABLE_TYPE == 4)) pf_sim_data_read_dynamic_energy += (pf_cacti_data_read_dynamic_energy / 2); // only read half of the 2 data values in 2d4p
+  else if (addr) pf_sim_data_read_dynamic_energy += pf_cacti_data_read_dynamic_energy;
   return addr;
 }
 
